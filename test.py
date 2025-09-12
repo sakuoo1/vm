@@ -2,36 +2,44 @@ import os
 import re
 import shutil
 import sys
+import traceback
 import requests
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QTextEdit, QVBoxLayout, QHBoxLayout, QFileDialog, QGroupBox, QMessageBox
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 # ------------------ VERSION ------------------
-VERSION = "5.0.0"
+VERSION = "8.0.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 
-def parse_version(v):
-    return tuple(map(int, v.strip().split(".")))
+def write_crash_log(exc: Exception):
+    """Écrit l'erreur dans crash.txt"""
+    crash_path = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), "crash.txt")
+    with open(crash_path, "a", encoding="utf-8") as f:
+        f.write(f"--- {traceback.format_exc()} ---\n")
 
-# ------------------ Thread vérification mise à jour ------------------
+# ------------------ Thread de vérification MAJ ------------------
 class UpdateCheckerThread(QThread):
-    result = pyqtSignal(str, bool)  # latest_version, up_to_date
+    result = pyqtSignal(str, bool, str)  # latest_version, up_to_date, error_message
 
     def run(self):
         try:
             r = requests.get(UPDATE_CHECK_URL, timeout=5)
-            if r.status_code == 200:
-                latest_version = r.text.strip()
-                up_to_date = parse_version(VERSION) >= parse_version(latest_version)
-                self.result.emit(latest_version, up_to_date)
-            else:
-                self.result.emit("Erreur", False)
-        except Exception:
-            self.result.emit("Erreur", False)
+            if r.status_code != 200:
+                self.result.emit("", True, "Erreur HTTP lors de la vérification")
+                return
+            latest_version = r.text.strip().splitlines()[0].strip()
+            up_to_date = self.version_tuple(VERSION) >= self.version_tuple(latest_version)
+            self.result.emit(latest_version, up_to_date, "")
+        except Exception as e:
+            self.result.emit("", True, str(e))
+
+    @staticmethod
+    def version_tuple(v):
+        return tuple(int(x) for x in v.strip().split(".") if x.isdigit())
 
 # ------------------ Fonctions VMT/Dossier ------------------
 def read_file(path):
@@ -98,12 +106,13 @@ def apply_vmt_changes(modified_vmt_files, log_widget):
             log_widget.append(f"[MODIFIÉ] {fullpath}")
         except Exception as e:
             log_widget.append(f"[ERREUR ÉCRITURE] {fullpath} -> {e}")
+            write_crash_log(e)
 
 def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
     for old, new in dirs_to_rename:
         base_name = os.path.basename(new)
         parent_dir = os.path.dirname(new)
-        new_name = os.path.join(parent_dir, f"{prefix_suffix}{base_name}" if prefix_suffix else base_name)
+        new_name = os.path.join(parent_dir, f"{prefix_suffix}{base_name}")
         try:
             os.makedirs(os.path.dirname(new_name), exist_ok=True)
             if os.path.exists(new_name):
@@ -121,6 +130,7 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
                 log_widget.append(f"[DOSSIER RENOMMÉ] {old} -> {new_name}")
         except Exception as e:
             log_widget.append(f"[ERREUR RENOMMAGE] {old} -> {new_name} : {e}")
+            write_crash_log(e)
 
 # ------------------ Interface principale ------------------
 class VMTPathRenamer(QWidget):
@@ -129,22 +139,15 @@ class VMTPathRenamer(QWidget):
         self.setWindowTitle("🎬 VMT Path Renamer - Noir/Rouge")
         self.setGeometry(100, 100, 1100, 900)
         self.init_ui()
-        self.check_update()  # Vérification mise à jour automatique
+        self.start_update_check()
 
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Label et bouton mise à jour
-        update_layout = QHBoxLayout()
+        # Label MAJ
         self.update_label = QLabel("🔄 Vérification mise à jour...")
-        self.update_btn = QPushButton("⬇️ Télécharger mise à jour")
-        self.update_btn.setEnabled(False)
-        self.update_btn.clicked.connect(self.download_update)
-        update_layout.addWidget(self.update_label)
-        update_layout.addWidget(self.update_btn)
-        layout.addLayout(update_layout)
+        layout.addWidget(self.update_label)
 
-        # Fonction pour boutons stylés
         def styled_button(text):
             btn = QPushButton(text)
             btn.setCursor(Qt.PointingHandCursor)
@@ -163,7 +166,7 @@ class VMTPathRenamer(QWidget):
             """)
             return btn
 
-        # Dossier à scanner
+        # Dossier
         folder_group = QGroupBox("Dossier à scanner")
         folder_layout = QHBoxLayout()
         self.folder_entry = QLineEdit()
@@ -253,7 +256,7 @@ class VMTPathRenamer(QWidget):
             }
         """)
 
-    # ------------------ Fonctions ------------------
+    # --- Fonctions principales ---
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir un dossier")
         if folder:
@@ -282,75 +285,84 @@ class VMTPathRenamer(QWidget):
 
     def run_vmt(self):
         self.log_widget.clear()
-        MATERIALS_DIR = self.folder_entry.text().strip()
-        NEW_PATH = self.path_entry.text().strip().replace('\\','/')
-        if not os.path.isdir(MATERIALS_DIR) or not NEW_PATH:
-            QMessageBox.critical(self, "Erreur", "Vérifiez dossier et chemin cible.")
-            return
         try:
+            MATERIALS_DIR = self.folder_entry.text().strip()
+            NEW_PATH = self.path_entry.text().strip().replace('\\','/')
+            if not os.path.isdir(MATERIALS_DIR) or not NEW_PATH:
+                QMessageBox.critical(self, "Erreur", "Vérifiez dossier et chemin cible.")
+                return
             self.log_widget.append("=== Début remplacement chemins VMT ===")
-            vmt_dirs, modified_vmt_files = replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, self.log_widget)
+            _, modified_vmt_files = replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, self.log_widget)
             apply_vmt_changes(modified_vmt_files, self.log_widget)
             self.log_widget.append("=== Remplacement terminé ===")
         except Exception as e:
+            write_crash_log(e)
             self.log_widget.append(f"[ERREUR] {e}")
 
     def run_rename(self):
         self.log_widget.clear()
-        prefix_suffix = self.prefix_entry.text().strip()
-        dirs_to_rename = []
-        for line in self.detected_dirs_widget.toPlainText().splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            dirs_to_rename.append((line, line))
-        if not dirs_to_rename:
-            self.log_widget.append("Aucun dossier à renommer.")
-            return
-        apply_dirs_changes(dirs_to_rename, self.log_widget, prefix_suffix=prefix_suffix)
-        self.log_widget.append("=== Renommage terminé ===")
+        try:
+            prefix_suffix = self.prefix_entry.text().strip()
+            dirs_to_rename = [(line.strip(), line.strip()) for line in self.detected_dirs_widget.toPlainText().splitlines() if line.strip()]
+            if not dirs_to_rename:
+                self.log_widget.append("Aucun dossier à renommer.")
+                return
+            apply_dirs_changes(dirs_to_rename, self.log_widget, prefix_suffix=prefix_suffix)
+            self.log_widget.append("=== Renommage terminé ===")
+        except Exception as e:
+            write_crash_log(e)
+            self.log_widget.append(f"[ERREUR] {e}")
 
     def apply_move_vmt_vtf(self):
         self.log_widget.append("=== Début déplacement VMT/VTF ===")
-        target_dir = QFileDialog.getExistingDirectory(self, "Choisir le dossier de destination")
-        if not target_dir:
-            self.log_widget.append("[ANNULÉ] Aucun dossier choisi.")
-            return
-        prefix_suffix = self.prefix_entry.text().strip()
-        for line in self.detected_dirs_widget.toPlainText().splitlines():
-            old_dir = line.strip()
-            if not old_dir or not os.path.exists(old_dir):
-                continue
-            base_name = os.path.basename(old_dir)
-            dest_dir = os.path.join(target_dir, f"{prefix_suffix}{base_name}" if prefix_suffix else base_name)
-            os.makedirs(dest_dir, exist_ok=True)
-            for ext in ('.vmt', '.vtf'):
-                for fname in os.listdir(old_dir):
-                    if fname.lower().endswith(ext):
-                        src = os.path.join(old_dir, fname)
-                        dst = os.path.join(dest_dir, fname)
-                        shutil.move(src, dst)
-                        self.log_widget.append(f"[DÉPLACÉ] {src} -> {dst}")
-        self.log_widget.append("=== Déplacement VMT/VTF terminé ===")
+        try:
+            target_dir = QFileDialog.getExistingDirectory(self, "Choisir le dossier de destination")
+            if not target_dir:
+                self.log_widget.append("[ANNULÉ] Aucun dossier choisi.")
+                return
+            prefix_suffix = self.prefix_entry.text().strip()
+            for line in self.detected_dirs_widget.toPlainText().splitlines():
+                old_dir = line.strip()
+                if not old_dir or not os.path.exists(old_dir):
+                    continue
+                base_name = os.path.basename(old_dir)
+                dest_dir = os.path.join(target_dir, f"{prefix_suffix}{base_name}" if prefix_suffix else base_name)
+                os.makedirs(dest_dir, exist_ok=True)
+                for ext in ('.vmt', '.vtf'):
+                    for fname in os.listdir(old_dir):
+                        if fname.lower().endswith(ext):
+                            src = os.path.join(old_dir, fname)
+                            dst = os.path.join(dest_dir, fname)
+                            shutil.move(src, dst)
+                            self.log_widget.append(f"[DÉPLACÉ] {src} -> {dst}")
+            self.log_widget.append("=== Déplacement VMT/VTF terminé ===")
+        except Exception as e:
+            write_crash_log(e)
+            self.log_widget.append(f"[ERREUR] {e}")
 
-    # ------------------ Mise à jour ------------------
-    def check_update(self):
-        self.update_thread = UpdateCheckerThread()
-        self.update_thread.result.connect(self.update_check_result)
-        self.update_thread.start()
+    # --- Mise à jour ---
+    def start_update_check(self):
+        try:
+            self.update_thread = UpdateCheckerThread()
+            self.update_thread.result.connect(self.update_check_result)
+            self.update_thread.start()
+        except Exception as e:
+            write_crash_log(e)
+            self.update_label.setText(f"⚠ Impossible de vérifier la mise à jour: {e}")
 
-    def update_check_result(self, latest_version, up_to_date):
-        if latest_version == "Erreur":
-            self.update_label.setText("⚠️ Impossible de vérifier la mise à jour. Nouvelle tentative dans 10s")
-            self.update_btn.setEnabled(False)
-            QTimer.singleShot(10000, self.check_update)
+    def update_check_result(self, latest_version, up_to_date, error_message):
+        if error_message:
+            self.update_label.setText(f"⚠ Impossible de vérifier la mise à jour: {error_message}")
         else:
             if up_to_date:
                 self.update_label.setText(f"✅ Application à jour ({VERSION})")
-                self.update_btn.setEnabled(False)
             else:
                 self.update_label.setText(f"❌ Nouvelle version disponible ({latest_version})")
-                self.update_btn.setEnabled(True)
+                reply = QMessageBox.question(self, "Mise à jour disponible",
+                                             f"Nouvelle version ({latest_version}) disponible.\nVoulez-vous mettre à jour ?",
+                                             QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    self.download_update()
 
     def download_update(self):
         try:
@@ -365,13 +377,16 @@ class VMTPathRenamer(QWidget):
             python = sys.executable
             os.execl(python, python, *sys.argv)
         except Exception as e:
+            write_crash_log(e)
             QMessageBox.warning(self, "Erreur", f"Échec téléchargement : {e}")
 
 # ------------------ Lancement ------------------
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = VMTPathRenamer()
-    window.show()
-    sys.exit(app.exec_())
-
-
+    try:
+        app = QApplication(sys.argv)
+        window = VMTPathRenamer()
+        window.show()
+        sys.exit(app.exec_())
+    except Exception as e:
+        write_crash_log(e)
+        QMessageBox.critical(None, "Crash", f"L'application a crashé : {e}")
