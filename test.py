@@ -830,7 +830,7 @@ def require_authentication():
 
 # ------------------ VERSION ------------------
 
-VERSION = "13.0.0"  # version locale
+VERSION = "15.1.0"  # version locale
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 
@@ -4915,3 +4915,4 @@ if __name__ == "__main__":
         log_crash(str(e))
         print(f"Erreur au lancement : {e}")
         input("Appuyez sur Entrée pour quitter...")
+
