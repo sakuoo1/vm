@@ -15,11 +15,9 @@ VERSION = "0.1"  # Version locale de départ
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 
-
 def parse_version(v):
     """Convertit une version string '0.1.2' en tuple (0,1,2) pour comparaison"""
     return tuple(map(int, v.strip().split(".")))
-
 
 # ------------------ Fonctions VMT/Dossier ------------------
 
@@ -384,22 +382,34 @@ class VMTPathRenamer(QWidget):
 
     def download_update(self):
         try:
-            r = requests.get(UPDATE_SCRIPT_URL, timeout=10)
-            if r.status_code != 200:
+            # Télécharge le nouveau script
+            r_code = requests.get(UPDATE_SCRIPT_URL, timeout=10)
+            if r_code.status_code != 200:
                 QMessageBox.warning(self, "Erreur", "Impossible de télécharger la nouvelle version.")
                 return
 
-            script_path = os.path.abspath(sys.argv[0])  # chemin du script en cours
+            # Récupère la version officielle
+            r_ver = requests.get(UPDATE_CHECK_URL, timeout=5)
+            latest_version = r_ver.text.strip() if r_ver.status_code == 200 else VERSION
+
+            script_path = os.path.abspath(sys.argv[0])
+
+            new_code = r_code.text
+
+            # Remplace la ligne VERSION par la nouvelle version
+            new_code = re.sub(r'VERSION\s*=\s*".*"', f'VERSION = "{latest_version}"', new_code)
+
+            # Écrit le nouveau code
             with open(script_path, "w", encoding="utf-8") as f:
-                f.write(r.text)
+                f.write(new_code)
 
             QMessageBox.information(
                 self,
                 "Mise à jour",
-                "Nouvelle version installée avec succès !\nL'application va redémarrer."
+                f"Nouvelle version {latest_version} installée avec succès !\nL'application va redémarrer."
             )
 
-            # 🚀 Redémarrage auto
+            # Redémarrage automatique
             python = sys.executable
             os.execl(python, python, *sys.argv)
 
@@ -413,5 +423,3 @@ if __name__ == "__main__":
     window = VMTPathRenamer()
     window.show()
     sys.exit(app.exec_())
-
-
