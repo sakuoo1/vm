@@ -389,6 +389,141 @@ class AuthDialog(QDialog):
         else:
             event.accept()
 
+class ChangelogDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setWindowTitle("📋 Changelog - Notes de Version")
+        self.setFixedSize(800, 600)
+        self.setModal(True)
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # Titre avec style moderne
+        title = QLabel("📋 Changelog - Historique des Versions")
+        title.setAlignment(Qt.AlignCenter)
+        title.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        title.setStyleSheet("""
+            QLabel {
+                color: #e50914;
+                margin-bottom: 20px;
+                padding: 15px;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #2a2a2a, stop: 1 #1a1a1a);
+                border: 2px solid #e50914;
+                border-radius: 10px;
+            }
+        """)
+        layout.addWidget(title)
+        
+        # Zone de texte avec contenu du changelog
+        self.changelog_text = QTextEdit()
+        self.changelog_text.setFont(QFont("Consolas", 11))
+        self.changelog_text.setReadOnly(True)  # Lecture seule
+        
+        # Contenu du changelog intégré dans le code
+        changelog_content = """
+# VMT Path Renamer - Changelog
+
+## Version 16.8.0 - Dernière mise à jour
+✨ **Nouvelles fonctionnalités :**
+• Interface d'authentification moderne
+• Vérification automatique des mises à jour
+• Interface utilisateur avec thème sombre
+
+## Version 16.0.0 - Version initiale
+📁 **Fonctionnalités de base :**
+• Renommage de fichiers VMT
+• Gestion des dossiers
+• Interface utilisateur simple
+• Logs d'activité
+
+---
+        """
+        
+        self.changelog_text.setPlainText(changelog_content.strip())
+        
+        # Style moderne pour la zone de texte
+        self.changelog_text.setStyleSheet("""
+            QTextEdit {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #2a2a2a, stop: 1 #1e1e1e);
+                color: #ffffff;
+                border: 2px solid #444444;
+                border-radius: 12px;
+                padding: 20px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 11px;
+                line-height: 1.4;
+                selection-background-color: #e50914;
+            }
+            QScrollBar:vertical {
+                background: #333333;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background: #e50914;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #f40612;
+            }
+        """)
+        
+        layout.addWidget(self.changelog_text)
+        
+        # Bouton fermer avec style Netflix
+        close_btn = QPushButton("❌ Fermer")
+        close_btn.clicked.connect(self.accept)
+        close_btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #e50914, stop: 1 #b8070f);
+                color: white;
+                font-weight: bold;
+                border: 2px solid #e50914;
+                border-radius: 8px;
+                padding: 12px 30px;
+                font-size: 12px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #f40612, stop: 1 #e50914);
+                border-color: #f40612;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #b8070f, stop: 1 #8a0509);
+            }
+        """)
+        
+        # Layout pour centrer le bouton
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_btn)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+        
+        # Style général de la fenêtre
+        self.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #141414, stop: 1 #0a0a0a);
+                color: #ffffff;
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+        """)
+
 class AdminPanel(QDialog):
     def __init__(self, supabase_url, supabase_key):
         super().__init__()
@@ -1384,7 +1519,7 @@ def require_authentication():
 
 
 
-VERSION = "16.8.0"  # version locale
+VERSION = "17.0.0"  # version locale
 
 
 
@@ -4530,6 +4665,24 @@ class VMTPathRenamer(QWidget):
 
 
 
+        # Bouton Changelog
+        self.changelog_btn = QPushButton("📋 Changelog")
+        self.changelog_btn.clicked.connect(self.show_changelog)
+        self.changelog_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #444;
+                color: white;
+                font-weight: bold;
+                padding: 5px 10px;
+                border-radius: 3px;
+                border: none;
+                font-size: 9px;
+                margin-left: 10px;
+            }
+            QPushButton:hover { background-color: #666; }
+        """)
+        countdown_layout.addWidget(self.changelog_btn)
+
         countdown_layout.addStretch()  # Pousse le label vers la gauche
 
 
@@ -5866,23 +6019,8 @@ class VMTPathRenamer(QWidget):
 
 
 
-                QMessageBox.information(self, "Mise à jour disponible",
-
-
-
-                                        f"Une nouvelle version est disponible !\n\n"
-
-
-
-                                        f"Version actuelle: {VERSION}\n"
-
-
-
-                                        f"Nouvelle version: {latest_version}\n\n"
-
-
-
-                                        "Cliquez sur le bouton pour mettre à jour.")
+                # Forcer l'installation de la mise à jour
+                self.force_update_installation(latest_version)
 
 
 
@@ -6002,6 +6140,78 @@ class VMTPathRenamer(QWidget):
 
 
 
+    def force_update_installation(self, latest_version):
+        """ installer la mise à jour"""
+        # Désactiver toute l'interface
+        self.setEnabled(False)
+        
+        # Créer une boîte de dialogue modale obligatoire
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("⚠️ Mise à jour obligatoire")
+        msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setText(f"""
+🔄 MISE À JOUR OBLIGATOIRE DÉTECTÉE
+
+Une nouvelle version est disponible et doit être installée.
+
+Version actuelle: {VERSION}
+Nouvelle version: {latest_version}
+
+L'application sera fermée après l'installation.
+Vous devez redémarrer manuellement après la mise à jour.
+
+Cliquez sur "Installer" pour continuer.
+        """)
+        
+        # Seul bouton disponible : Installer
+        install_btn = msg_box.addButton("🔄 Installer maintenant", QMessageBox.AcceptRole)
+        msg_box.setDefaultButton(install_btn)
+        
+        # Empêcher la fermeture de la boîte de dialogue
+        msg_box.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint)
+        
+        # Style de la boîte de dialogue
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #222;
+                color: white;
+                font-family: 'Segoe UI';
+                font-size: 12px;
+            }
+            QMessageBox QLabel {
+                color: white;
+                background-color: transparent;
+                padding: 10px;
+            }
+            QMessageBox QPushButton {
+                background-color: #e50914;
+                color: white;
+                font-weight: bold;
+                padding: 10px 20px;
+                border-radius: 5px;
+                border: none;
+                min-width: 120px;
+                font-size: 12px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #f40612;
+            }
+        """)
+        
+        # Afficher la boîte de dialogue et attendre la réponse
+        result = msg_box.exec_()
+        
+        # Lancer le téléchargement et l'installation
+        if result == QMessageBox.AcceptRole:
+            self.download_update()
+            # Fermer l'application après l'installation
+            QApplication.quit()
+    
+    def show_changelog(self):
+        """Ouvrir la fenêtre changelog"""
+        changelog_dialog = ChangelogDialog()
+        changelog_dialog.exec_()
+    
     def update_countdown_display(self):
 
 
@@ -9553,4 +9763,3 @@ if __name__ == "__main__":
         print(f"Erreur au lancement : {e}")
 
         input("Appuyez sur Entrée pour quitter...")
-
