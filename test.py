@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 # ------------------ VERSION ------------------
-VERSION = "8.0.0"
+VERSION = "9.0.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 
@@ -390,3 +390,4 @@ if __name__ == "__main__":
     except Exception as e:
         write_crash_log(e)
         QMessageBox.critical(None, "Crash", f"L'application a crashé : {e}")
+
