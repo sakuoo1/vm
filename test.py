@@ -58,7 +58,19 @@ class AuthWorker(QThread):
 
                     key_data = data[0]
                     
-
+                    # Vérifier si la clé est marquée pour revalidation forcée
+                    # Note: Le champ force_revalidation doit être ajouté à la table access_keys dans Supabase
+                    try:
+                        if key_data.get('force_revalidation', False):
+                            # Réinitialiser le flag de revalidation
+                            self.reset_revalidation_flag(key_data['id'])
+                            self.auth_result.emit(False, "Revalidation requise - Veuillez ressaisir votre cle d'acces", "")
+                            return
+                    except Exception:
+                        # Si le champ n'existe pas encore, continuer normalement
+                        pass
+                    
+                    # Vérifier l'expiration
                     if 'expires_at' in key_data and key_data['expires_at']:
                         from datetime import datetime
                         expires_at = datetime.fromisoformat(key_data['expires_at'].replace('Z', '+00:00'))
@@ -66,10 +78,11 @@ class AuthWorker(QThread):
                             self.auth_result.emit(False, "Clé expirée", "")
                             return
                     
-
+                    # Mettre à jour la dernière utilisation
+                    print(f"Authentification reussie pour cle ID: {key_data['id']}")
                     self.update_last_used(key_data['id'])
                     
-
+                    # Retourner le succès avec le rôle
                     user_role = key_data.get('role', 'user')
                     self.auth_result.emit(True, f"Accès autorisé - {key_data.get('description', 'Utilisateur')} ({user_role})", user_role)
                 else:
@@ -87,6 +100,29 @@ class AuthWorker(QThread):
     def update_last_used(self, key_id):
         """Met à jour la dernière utilisation de la clé"""
         try:
+            import datetime
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Format ISO 8601 correct pour Supabase
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+            
+            url = f"{self.supabase_url}/rest/v1/access_keys?id=eq.{key_id}"
+            data = {'last_used_at': now}
+            
+            print(f"Mise a jour last_used_at pour cle ID {key_id}: {now}")
+            response = requests.patch(url, json=data, headers=headers, timeout=5)
+            print(f"✅ Réponse Supabase: {response.status_code}")
+            
+        except Exception as e:
+            print(f"❌ Erreur update_last_used: {str(e)}")  
+    
+    def reset_revalidation_flag(self, key_id):
+        """Réinitialise le flag de revalidation forcée après utilisation"""
+        try:
             headers = {
                 'apikey': self.supabase_key,
                 'Authorization': f'Bearer {self.supabase_key}',
@@ -94,11 +130,11 @@ class AuthWorker(QThread):
             }
             
             url = f"{self.supabase_url}/rest/v1/access_keys?id=eq.{key_id}"
-            data = {'last_used_at': time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}
+            data = {'force_revalidation': False}
             
             requests.patch(url, json=data, headers=headers, timeout=5)
         except:
-            pass  
+            pass
 
 class AuthDialog(QDialog):
     def __init__(self):
@@ -179,7 +215,7 @@ class AuthDialog(QDialog):
         input_section.setSpacing(12)
         
         # Label Netflix
-        key_label = QLabel("🔑 Clé d'accès")
+        key_label = QLabel("Cle d'acces")
         key_label.setFont(QFont("Segoe UI", 13, QFont.Bold))
         key_label.setStyleSheet("color: #ffffff; margin-bottom: 8px;")
         input_section.addWidget(key_label)
@@ -272,243 +308,484 @@ class AuthDialog(QDialog):
         """)
         
         # Bouton Se connecter (principal Netflix)
+
         self.auth_button = QPushButton("🔓 Se connecter")
+
         self.auth_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+
         self.auth_button.clicked.connect(self.authenticate)
+
         self.auth_button.setStyleSheet("""
+
             QPushButton {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #e50914, stop: 1 #b8070f);
+
                 color: white;
+
                 font-weight: bold;
+
                 border: 2px solid #e50914;
+
                 border-radius: 8px;
+
                 padding: 12px 25px;
+
                 font-size: 12px;
+
                 min-width: 120px;
+
             }
+
             QPushButton:hover {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #f40612, stop: 1 #e50914);
+
                 border-color: #f40612;
+
             }
+
             QPushButton:pressed {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #b8070f, stop: 1 #8a0509);
+
             }
+
             QPushButton:disabled {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #444444, stop: 1 #333333);
+
                 color: #888888;
+
                 border-color: #555555;
+
             }
+
         """)
+
         
+
         button_layout.addWidget(self.quit_button)
+
         button_layout.addWidget(self.auth_button)
+
         layout.addLayout(button_layout)
+
         
+
         self.setLayout(layout)
+
         
+
         # Style général Netflix
+
         self.setStyleSheet("""
+
             QDialog {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #141414, stop: 1 #0a0a0a);
+
                 color: #ffffff;
+
                 font-family: 'Segoe UI', Arial, sans-serif;
+
             }
+
         """)
+
         
+
         # Focus automatique sur le champ de saisie
+
         self.key_input.setFocus()
+
     
+
     def authenticate(self):
+
         key = self.key_input.text().strip()
+
         
+
         if not key:
+
             self.show_error("Veuillez entrer une clé d'accès")
+
             return
+
         
+
         if len(key) < 8:
+
             self.show_error("La clé doit contenir au moins 8 caractères")
+
             return
+
         
+
         # Désactiver l'interface pendant la vérification
+
         self.auth_button.setEnabled(False)
+
         self.key_input.setEnabled(False)
+
         self.progress_bar.setVisible(True)
+
         self.progress_bar.setRange(0, 0)  # Animation infinie
+
         self.status_label.setText("🔍 Vérification de la clé...")
+
         
+
         # Lancer la vérification en arrière-plan
+
         self.worker = AuthWorker(key, self.SUPABASE_URL, self.SUPABASE_ANON_KEY)
+
         self.worker.auth_result.connect(self.on_auth_result)
+
         self.worker.start()
+
     
+
     def on_auth_result(self, success, message, user_role=""):
+
         # Réactiver l'interface
+
         self.auth_button.setEnabled(True)
+
         self.key_input.setEnabled(True)
+
         self.progress_bar.setVisible(False)
+
         
+
         if success:
+
             self.status_label.setText(f"✅ {message}")
+
             self.status_label.setStyleSheet("color: #28a745; font-size: 11px; margin: 10px 0;")
+
             self.authenticated = True
+
             self.user_role = user_role  # Stocker le rôle
+
             
+
             # Fermer la fenêtre après 1 seconde
+
             QApplication.processEvents()
+
             time.sleep(1)
+
             self.accept()
+
         else:
+
             self.show_error(f"❌ {message}")
+
             self.key_input.clear()
+
             self.key_input.setFocus()
+
     
+
     def show_error(self, message):
+
         self.status_label.setText(message)
+
         self.status_label.setStyleSheet("color: #ff6b6b; font-size: 11px; margin: 10px 0;")
+
     
+
     def closeEvent(self, event):
+
         if not self.authenticated:
+
             reply = QMessageBox.question(
+
                 self, 
+
                 'Quitter', 
+
                 'Êtes-vous sûr de vouloir quitter sans vous authentifier?',
+
                 QMessageBox.Yes | QMessageBox.No,
+
                 QMessageBox.No
+
             )
+
             
+
             if reply == QMessageBox.Yes:
+
                 event.accept()
+
                 sys.exit(0)
+
             else:
+
                 event.ignore()
+
         else:
+
             event.accept()
 
+
+
 class ChangelogDialog(QDialog):
+
     def __init__(self):
+
         super().__init__()
+
         self.init_ui()
+
         
+
     def init_ui(self):
+
         self.setWindowTitle("📋 Changelog - Notes de Version")
+
         self.setFixedSize(800, 600)
+
         self.setModal(True)
+
         
+
         layout = QVBoxLayout()
+
         layout.setSpacing(20)
+
         layout.setContentsMargins(30, 30, 30, 30)
+
         
+
         # Titre avec style moderne
+
         title = QLabel("📋 Changelog - Historique des Versions")
+
         title.setAlignment(Qt.AlignCenter)
+
         title.setFont(QFont("Segoe UI", 18, QFont.Bold))
+
         title.setStyleSheet("""
+
             QLabel {
+
                 color: #e50914;
+
                 margin-bottom: 20px;
+
                 padding: 15px;
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #2a2a2a, stop: 1 #1a1a1a);
+
                 border: 2px solid #e50914;
+
                 border-radius: 10px;
+
             }
+
         """)
+
         layout.addWidget(title)
+
         
+
         # Zone de texte avec contenu du changelog
+
         self.changelog_text = QTextEdit()
+
         self.changelog_text.setFont(QFont("Consolas", 11))
+
         self.changelog_text.setReadOnly(True)  # Lecture seule
+
         
+
         # Contenu du changelog intégré dans le code
+
         changelog_content = """
+
 # VMT Path Renamer - Changelog
 
-## Version 16.8.0 - Dernière mise à jour
+
+
+## Version 17.5.0 - Dernière mise à jour
+
 ✨ **Nouvelles fonctionnalités :**
+
+•  Sécurisation des clées 
+
 • Interface d'authentification moderne
+
 • Vérification automatique des mises à jour
+
 • Interface utilisateur avec thème sombre
 
-## Version 16.0.0 - Version initiale
+
+
+## Version 16.5.0 - Version initiale
+
 📁 **Fonctionnalités de base :**
+
+
 • Renommage de fichiers VMT
+
 • Gestion des dossiers
+
 • Interface utilisateur simple
+
 • Logs d'activité
 
+
+
 ---
+
         """
+
         
+
         self.changelog_text.setPlainText(changelog_content.strip())
+
         
+
         # Style moderne pour la zone de texte
+
         self.changelog_text.setStyleSheet("""
+
             QTextEdit {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #2a2a2a, stop: 1 #1e1e1e);
+
                 color: #ffffff;
+
                 border: 2px solid #444444;
+
                 border-radius: 12px;
+
                 padding: 20px;
+
                 font-family: 'Consolas', 'Courier New', monospace;
+
                 font-size: 11px;
+
                 line-height: 1.4;
+
                 selection-background-color: #e50914;
+
             }
+
             QScrollBar:vertical {
+
                 background: #333333;
+
                 width: 12px;
+
                 border-radius: 6px;
+
             }
+
             QScrollBar::handle:vertical {
+
                 background: #e50914;
+
                 border-radius: 6px;
+
                 min-height: 20px;
+
             }
+
             QScrollBar::handle:vertical:hover {
+
                 background: #f40612;
+
             }
+
         """)
+
         
+
         layout.addWidget(self.changelog_text)
+
         
+
         # Bouton fermer avec style Netflix
+
         close_btn = QPushButton("❌ Fermer")
+
         close_btn.clicked.connect(self.accept)
+
         close_btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
+
         close_btn.setStyleSheet("""
+
             QPushButton {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #e50914, stop: 1 #b8070f);
+
                 color: white;
+
                 font-weight: bold;
+
                 border: 2px solid #e50914;
+
                 border-radius: 8px;
+
                 padding: 12px 30px;
+
                 font-size: 12px;
+
                 min-width: 120px;
+
             }
+
             QPushButton:hover {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #f40612, stop: 1 #e50914);
+
                 border-color: #f40612;
+
             }
+
             QPushButton:pressed {
+
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+
                     stop: 0 #b8070f, stop: 1 #8a0509);
+
             }
+
         """)
+
         
+
         # Layout pour centrer le bouton
+
         button_layout = QHBoxLayout()
+
         button_layout.addStretch()
+
         button_layout.addWidget(close_btn)
+
         button_layout.addStretch()
         
         layout.addLayout(button_layout)
@@ -531,6 +808,12 @@ class AdminPanel(QDialog):
         self.supabase_key = supabase_key
         self.init_ui()
         self.load_keys()
+        
+        # Timer pour mise à jour automatique
+        from PyQt5.QtCore import QTimer
+        self.refresh_timer = QTimer()
+        self.refresh_timer.timeout.connect(self.load_keys)
+        self.refresh_timer.start(10000)  # Rafraîchir toutes les 10 secondes
         
     def init_ui(self):
         self.setWindowTitle("🔧 Panneau Administrateur - Gestion des Clés")
@@ -681,7 +964,7 @@ class AdminPanel(QDialog):
 
         
 
-        self.refresh_btn = QPushButton("🔄 Actualiser")
+        self.refresh_btn = QPushButton("Actualiser")
 
         self.refresh_btn.clicked.connect(self.load_keys)
 
@@ -709,11 +992,45 @@ class AdminPanel(QDialog):
 
         
 
-        actions_layout.addWidget(self.refresh_btn)
-
-        actions_layout.addStretch()
-
+        # Bouton pour voir les clés connectées
+        self.connected_keys_btn = QPushButton("👥 Clés Connectées")
+        self.connected_keys_btn.clicked.connect(self.show_connected_keys)
+        self.connected_keys_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9933CC;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover { background-color: #BB44FF; }
+        """)
         
+        # Bouton pour forcer la revalidation globale
+        self.force_revalidation_btn = QPushButton("Forcer Revalidation")
+        self.force_revalidation_btn.clicked.connect(self.force_global_revalidation)
+        self.force_revalidation_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF6600;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover { background-color: #FF8800; }
+        """)
+        
+        # Indicateur de mise à jour automatique
+        auto_refresh_label = QLabel("Mise a jour auto: 10s")
+        auto_refresh_label.setStyleSheet("color: #888; font-size: 9px; padding: 5px;")
+        
+        actions_layout.addWidget(self.refresh_btn)
+        actions_layout.addWidget(self.connected_keys_btn)
+        actions_layout.addWidget(self.force_revalidation_btn)
+        actions_layout.addWidget(auto_refresh_label)
+        actions_layout.addStretch()
 
         keys_layout.addLayout(actions_layout)
 
@@ -1001,11 +1318,13 @@ class AdminPanel(QDialog):
 
                     try:
 
-                        self.create_key_widget(key_data)
+                        key_widget = self.create_key_widget(key_data)
+                        if key_widget:
+                            self.keys_container_layout.addWidget(key_widget)
 
                     except Exception as key_error:
 
-                        error_label = QLabel(f"🔑 Erreur: {str(key_error)}")
+                        error_label = QLabel(f"Erreur: {str(key_error)}")
 
                         error_label.setStyleSheet("color: #FF6666; padding: 5px;")
 
@@ -1067,7 +1386,7 @@ class AdminPanel(QDialog):
 
         
 
-        title_label = QLabel(f"🔑 {desc}")
+        title_label = QLabel(f"Cle: {desc}")
 
         title_label.setFont(QFont("Arial", 10, QFont.Bold))
 
@@ -1099,11 +1418,29 @@ class AdminPanel(QDialog):
 
         
 
+        # Calculer le statut de connexion
+        connection_status = self.get_connection_status(key_data)
+        
+        # Ajouter la dernière utilisation
+        last_used = key_data.get('last_used_at', 'Jamais utilisée')
+        if last_used != 'Jamais utilisée' and last_used:
+            last_used_formatted = last_used[:19].replace('T', ' ')
+        else:
+            last_used_formatted = 'Jamais utilisée'
+        
         details_label = QLabel(f"{status} | {role} | Créée: {created} | Expire: {expires} | Usage: {usage}")
-
         details_label.setStyleSheet("color: #CCC; font-size: 9px;")
-
         info_layout.addWidget(details_label)
+        
+        # Ligne 3: Dernière utilisation
+        last_used_label = QLabel(f"🕒 Dernière utilisation: {last_used_formatted}")
+        last_used_label.setStyleSheet("color: #87CEEB; font-size: 9px; font-weight: bold;")
+        info_layout.addWidget(last_used_label)
+        
+        # Ligne 4: Statut de connexion
+        connection_label = QLabel(connection_status)
+        connection_label.setStyleSheet("color: #FFD700; font-size: 9px; font-weight: bold;")
+        info_layout.addWidget(connection_label)
 
         
 
@@ -1226,12 +1563,25 @@ class AdminPanel(QDialog):
         """)
 
         buttons_layout.addWidget(info_btn)
-
         
+        # Bouton forcer revalidation
+        revalidate_btn = QPushButton("Revalider")
+        revalidate_btn.clicked.connect(lambda: self.force_key_revalidation(key_widget))
+        revalidate_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF6600;
+                color: white;
+                font-weight: bold;
+                padding: 5px 10px;
+                border-radius: 3px;
+                border: none;
+                font-size: 9px;
+            }
+            QPushButton:hover { background-color: #FF8800; }
+        """)
+        buttons_layout.addWidget(revalidate_btn)
 
         key_layout.addLayout(buttons_layout)
-
-        
 
         # Style du widget
 
@@ -1329,7 +1679,7 @@ class AdminPanel(QDialog):
 
         info_text = f"""
 
-🔑 INFORMATIONS DÉTAILLÉES
+INFORMATIONS DETAILLEES
 
 
 
@@ -1448,21 +1798,399 @@ Limite d'utilisation: {key_data.get('max_usage', 'Illimitée') if key_data.get('
                     QMessageBox.warning(self, "Erreur", "Clé non trouvée")
 
             else:
-
                 QMessageBox.critical(self, "Erreur", f"Erreur: {response.status_code}")
 
-                
-
         except Exception as e:
-
             QMessageBox.critical(self, "Erreur", f"Erreur: {str(e)}")
 
+    def show_connected_keys(self):
+        """Afficher les clés actuellement connectées (utilisées récemment)"""
+        try:
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json'
+            }
+
+            from datetime import datetime, timedelta
+            yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+            # Requête pour toutes les clés actives
+            url = f"{self.supabase_url}/rest/v1/access_keys?select=*&is_active=eq.true&order=last_used_at.desc.nullslast"
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                all_keys = response.json()
+
+                if not all_keys:
+                    info_text = "🔍 CLÉS CONNECTÉES\n\n❌ Aucune clé active trouvée."
+                else:
+                    # Filtrer les clés connectées récemment
+                    connected_keys = []
+                    for key_data in all_keys:
+                        last_used = key_data.get('last_used_at')
+                        if last_used:
+                            try:
+                                last_used_dt = datetime.fromisoformat(last_used.replace('Z', '+00:00'))
+                                yesterday_dt = datetime.now(last_used_dt.tzinfo) - timedelta(days=1)
+                                if last_used_dt >= yesterday_dt:
+                                    connected_keys.append(key_data)
+                            except:
+                                pass
+                    
+                    if not connected_keys:
+                        info_text = "🔍 CLÉS CONNECTÉES\n\n❌ Aucune clé connectée dans les dernières 24 heures."
+                        info_text += f"\n\n📋 Clés actives totales: {len(all_keys)}"
+                        info_text += "\n\n💡 Les clés apparaîtront ici après leur première utilisation."
+                        
+                        # Afficher toutes les clés avec leur statut
+                        info_text += "\n\n📋 TOUTES LES CLÉS ACTIVES:\n\n"
+                        for i, key_data in enumerate(all_keys, 1):
+                            desc = key_data.get('description', 'Sans description')
+                            role = key_data.get('role', 'user').upper()
+                            last_used = key_data.get('last_used_at', 'Jamais utilisée')
+                            
+                            if last_used != 'Jamais utilisée' and last_used:
+                                last_used = last_used[:19].replace('T', ' ')
+                            
+                            info_text += f"{i}. Cle: {desc}\n"
+                            info_text += f"   👤 Rôle: {role}\n"
+                            info_text += f"   🕒 Dernière utilisation: {last_used}\n\n"
+                    else:
+                        info_text = f"🔍 CLÉS CONNECTÉES ({len(connected_keys)} clés actives)\n\n"
+                        info_text += "📊 Clés utilisées dans les dernières 24 heures:\n\n"
+
+                        for i, key_data in enumerate(connected_keys, 1):
+                            desc = key_data.get('description', 'Sans description')
+                            role = key_data.get('role', 'user').upper()
+                            last_used = key_data.get('last_used_at', 'Jamais')
+                            usage_count = key_data.get('usage_count', 0)
+
+                            if last_used != 'Jamais':
+                                last_used = last_used[:19].replace('T', ' ')
+
+                            info_text += f"{i}. Cle: {desc}\n"
+                            info_text += f"   👤 Rôle: {role}\n"
+                            info_text += f"   🕒 Dernière utilisation: {last_used}\n"
+                            info_text += f"   📊 Utilisations totales: {usage_count}\n\n"
+
+                dialog = QDialog(self)
+                dialog.setWindowTitle("👥 Clés Actuellement Connectées")
+                dialog.setFixedSize(600, 500)
+                dialog.setModal(True)
+
+                layout = QVBoxLayout()
+
+                text_widget = QTextEdit()
+                text_widget.setPlainText(info_text)
+                text_widget.setReadOnly(True)
+                text_widget.setFont(QFont("Consolas", 10))
+                text_widget.setStyleSheet("""
+                    QTextEdit {
+                        background-color: #222;
+                        color: #FFF;
+                        border: 1px solid #444;
+                        border-radius: 5px;
+                        padding: 10px;
+                    }
+                """)
+                layout.addWidget(text_widget)
+
+                # Boutons
+                buttons_layout = QHBoxLayout()
+                
+                refresh_btn = QPushButton("Actualiser")
+                refresh_btn.clicked.connect(lambda: self.refresh_connected_keys_dialog(dialog, text_widget))
+                refresh_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #0066CC;
+                        color: white;
+                        font-weight: bold;
+                        padding: 10px;
+                        border-radius: 5px;
+                        border: none;
+                    }
+                    QPushButton:hover { background-color: #0088FF; }
+                """)
+                
+                close_btn = QPushButton("❌ Fermer")
+                close_btn.clicked.connect(dialog.accept)
+                close_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #666;
+                        color: white;
+                        font-weight: bold;
+                        padding: 10px;
+                        border-radius: 5px;
+                        border: none;
+                    }
+                    QPushButton:hover { background-color: #888; }
+                """)
+                
+                buttons_layout.addWidget(refresh_btn)
+                buttons_layout.addWidget(close_btn)
+                layout.addLayout(buttons_layout)
+
+                dialog.setLayout(layout)
+                dialog.setStyleSheet("""
+                    QDialog {
+                        background-color: #111;
+                        color: #FFF;
+                        font-family: 'Segoe UI';
+                    }
+                """)
+                dialog.exec_()
+
+            else:
+                QMessageBox.critical(self, "Erreur", f"Erreur lors de la récupération: {response.status_code}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur: {str(e)}")
+
+    def refresh_connected_keys_dialog(self, dialog, text_widget):
+        """Actualiser les données des clés connectées dans la boîte de dialogue"""
+        try:
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json'
+            }
+
+            from datetime import datetime, timedelta
+            yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+            url = f"{self.supabase_url}/rest/v1/access_keys?select=*&last_used_at=gte.{yesterday}&is_active=eq.true&order=last_used_at.desc"
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                connected_keys = response.json()
+
+                if not connected_keys:
+                    info_text = "🔍 CLÉS CONNECTÉES\n\n❌ Aucune clé connectée dans les dernières 24 heures."
+                else:
+                    info_text = f"🔍 CLÉS CONNECTÉES ({len(connected_keys)} clés actives)\n\n"
+                    info_text += "📊 Clés utilisées dans les dernières 24 heures:\n\n"
+
+                    for i, key_data in enumerate(connected_keys, 1):
+                        desc = key_data.get('description', 'Sans description')
+                        role = key_data.get('role', 'user').upper()
+                        last_used = key_data.get('last_used_at', 'Jamais')
+                        usage_count = key_data.get('usage_count', 0)
+
+                        if last_used != 'Jamais':
+                            last_used = last_used[:19].replace('T', ' ')
+
+                        info_text += f"{i}. 🔑 {desc}\n"
+                        info_text += f"   👤 Rôle: {role}\n"
+                        info_text += f"   🕒 Dernière utilisation: {last_used}\n"
+                        info_text += f"   📊 Utilisations totales: {usage_count}\n\n"
+
+                # Ajouter l'heure de dernière mise à jour
+                now = datetime.now().strftime('%H:%M:%S')
+                info_text += f"\n🕒 Dernière mise à jour: {now}"
+                
+                text_widget.setPlainText(info_text)
+            else:
+                text_widget.setPlainText(f"❌ Erreur lors de la récupération: {response.status_code}")
+
+        except Exception as e:
+            text_widget.setPlainText(f"❌ Erreur: {str(e)}")
+
+    def get_connection_status(self, key_data):
+        """Calculer le statut de connexion d'une clé"""
+        try:
+            from datetime import datetime, timedelta
+            
+            last_used = key_data.get('last_used_at')
+            if not last_used:
+                return "🔴 Jamais connecté"
+            
+            # Convertir la date de dernière utilisation
+            last_used_dt = datetime.fromisoformat(last_used.replace('Z', '+00:00'))
+            now = datetime.now(last_used_dt.tzinfo)
+            
+            # Calculer la différence
+            diff = now - last_used_dt
+            
+            # Déterminer le statut
+            if diff.total_seconds() < 300:  # 5 minutes
+                return "🟢 Connecté maintenant"
+            elif diff.total_seconds() < 3600:  # 1 heure
+                minutes = int(diff.total_seconds() / 60)
+                return f"🟡 Connecté il y a {minutes} min"
+            elif diff.total_seconds() < 86400:  # 24 heures
+                hours = int(diff.total_seconds() / 3600)
+                return f"🟠 Connecté il y a {hours}h"
+            elif diff.days < 7:  # 7 jours
+                return f"🔴 Connecté il y a {diff.days} jour(s)"
+            else:
+                return f"🔴 Inactif depuis {diff.days} jours"
+                
+        except Exception:
+            return "❓ Statut inconnu"
+
+    def force_close_application(self):
+        """Forcer la fermeture de l'application avec confirmation"""
+        reply = QMessageBox.question(
+            self,
+            '⚠️ Confirmation de Fermeture Forcée',
+            'Êtes-vous sûr de vouloir forcer la fermeture de l\'application?\n\n'
+            '⚠️ ATTENTION: Cette action fermera immédiatement l\'application\n'
+            'sans sauvegarder les données en cours.\n\n'
+            'Cette action est irréversible.',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            final_reply = QMessageBox.critical(
+                self,
+                '🚨 DERNIÈRE CONFIRMATION',
+                'DERNIÈRE CHANCE!\n\n'
+                '🚨 Vous êtes sur le point de FORCER LA FERMETURE\n'
+                'de l\'application VMT Path Renamer.\n\n'
+                'Voulez-vous vraiment continuer?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if final_reply == QMessageBox.Yes:
+                QMessageBox.information(
+                    self,
+                    '💀 Fermeture Forcée',
+                    'L\'application va se fermer dans 3 secondes...\n\n'
+                    '💀 FERMETURE FORCÉE ACTIVÉE'
+                )
+
+                import time
+                QApplication.processEvents()
+                time.sleep(1)
+
+                self.accept()
+
+                QApplication.processEvents()
+                time.sleep(1)
+
+                import os
+                os._exit(0)
+    
+    def force_key_revalidation(self, key_widget):
+        """Forcer la revalidation d'une clé spécifique"""
+        try:
+            # Récupérer les informations de la clé
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Récupérer les détails de la clé
+            url = f"{self.supabase_url}/rest/v1/access_keys?id=eq.{key_widget.key_id}"
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                key_data = response.json()
+                if key_data and len(key_data) > 0:
+                    key_info = key_data[0]
+                    key_desc = key_info.get('description', 'Clé inconnue')
+                    
+                    # Confirmation
+                    reply = QMessageBox.question(
+                        self,
+                        'Forcer Revalidation',
+                        f'Voulez-vous forcer la revalidation de la clé :\n\n'
+                        f'Cle: {key_desc}\n\n'
+                        f'⚠️ L\'utilisateur devra ressaisir sa clé pour continuer\n'
+                        f'à utiliser l\'application. Si la clé n\'est plus valide,\n'
+                        f'il ne pourra plus accéder à l\'application.',
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    
+                    if reply == QMessageBox.Yes:
+                        # Marquer la clé pour revalidation
+                        update_url = f"{self.supabase_url}/rest/v1/access_keys?id=eq.{key_widget.key_id}"
+                        update_data = {'force_revalidation': True}
+                        
+                        update_response = requests.patch(update_url, json=update_data, headers=headers, timeout=10)
+                        
+                        if update_response.status_code == 200:
+                            QMessageBox.information(
+                                self, 
+                                "✅ Revalidation Forcée", 
+                                f"La clé '{key_desc}' a été marquée pour revalidation.\n\n"
+                                f"L'utilisateur devra ressaisir sa clé lors de sa prochaine connexion."
+                            )
+                            self.load_keys()  # Recharger la liste
+                        else:
+                            QMessageBox.critical(self, "Erreur", f"Erreur lors de la mise à jour: {update_response.status_code}")
+                else:
+                    QMessageBox.warning(self, "Erreur", "Clé non trouvée")
+            else:
+                QMessageBox.critical(self, "Erreur", f"Erreur lors de la récupération: {response.status_code}")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Erreur: {str(e)}")
+    
+    def force_global_revalidation(self):
+        """Forcer la revalidation de toutes les clés actives"""
+        reply = QMessageBox.question(
+            self,
+            'Revalidation Globale',
+            '⚠️ ATTENTION: Forcer la revalidation globale\n\n'
+            'Cette action va marquer TOUTES les clés actives\n'
+            'pour revalidation. Tous les utilisateurs devront\n'
+            'ressaisir leur clé pour continuer à utiliser l\'application.\n\n'
+            'Voulez-vous vraiment continuer?',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            final_reply = QMessageBox.critical(
+                self,
+                '🚨 CONFIRMATION FINALE',
+                'DERNIÈRE CHANCE!\n\n'
+                '🚨 Vous êtes sur le point de FORCER LA REVALIDATION\n'
+                'de TOUTES les clés actives.\n\n'
+                'Tous les utilisateurs devront se reconnecter.\n\n'
+                'Confirmer cette action?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if final_reply == QMessageBox.Yes:
+                try:
+                    headers = {
+                        'apikey': self.supabase_key,
+                        'Authorization': f'Bearer {self.supabase_key}',
+                        'Content-Type': 'application/json'
+                    }
+                    
+                    # Marquer toutes les clés actives pour revalidation
+                    url = f"{self.supabase_url}/rest/v1/access_keys?is_active=eq.true"
+                    update_data = {'force_revalidation': True}
+                    
+                    response = requests.patch(url, json=update_data, headers=headers, timeout=10)
+                    
+                    if response.status_code == 200:
+                        QMessageBox.information(
+                            self,
+                            "✅ Revalidation Globale Activée",
+                            "Toutes les clés actives ont été marquées pour revalidation.\n\n"
+                            "Tous les utilisateurs devront ressaisir leur clé\n"
+                            "lors de leur prochaine connexion."
+                        )
+                        self.load_keys()  # Recharger la liste
+                    else:
+                        QMessageBox.critical(self, "Erreur", f"Erreur lors de la mise à jour globale: {response.status_code}")
+                        
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur", f"Erreur: {str(e)}")
 
 
 def require_authentication():
-
     """Fonction à appeler au début de votre application"""
-
     app = QApplication.instance()
 
     if app is None:
@@ -1519,7 +2247,7 @@ def require_authentication():
 
 
 
-VERSION = "17.0.0"  # version locale
+VERSION = "17.5.0"  # version locale
 
 
 
@@ -1661,255 +2389,509 @@ def check_update(silent=False):
 
         
 
+
+
         # Headers ultra-agressifs
+
+
 
         headers_variants = [
 
+
+
             {
+
+
 
                 'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
 
+
+
                 'Pragma': 'no-cache',
+
+
 
                 'Expires': '0',
 
+
+
                 'User-Agent': f'VMT-Path-Renamer/{VERSION}',
+
+
 
                 'Accept': 'text/plain, */*',
 
+
+
                 'Accept-Encoding': 'gzip, deflate',
+
+
 
                 'Connection': 'close'
 
+
+
             },
 
+
+
             {
+
+
 
                 'Cache-Control': 'no-cache',
 
+
+
                 'Pragma': 'no-cache',
+
+
 
                 'User-Agent': f'Mozilla/5.0 VMT-Path-Renamer/{VERSION}',
 
+
+
                 'Accept': '*/*',
+
+
 
                 'Connection': 'keep-alive'
 
+
+
             },
+
+
 
             {
 
+
+
                 'Cache-Control': 'no-store',
+
+
 
                 'User-Agent': f'VMT-Path-Renamer-ForceCheck/{VERSION}',
 
+
+
                 'Accept': 'text/plain',
+
+
 
                 'Connection': 'close'
 
+
+
             }
+
+
 
         ]
 
+
+
         
+
+
 
         successful_results = []
 
+
+
         highest_version = None
+
+
 
         highest_version_tuple = (0, 0, 0)
 
+
+
         highest_version_url = None
+
+
 
         local_version_tuple = parse_version(VERSION)
 
+
+
         
+
+
 
         if not silent:
 
+
+
             print(f"[DEBUG] Version locale tuple: {local_version_tuple}")
+
+
 
             print(f"[DEBUG] Test prioritaire des CDN (éviter GitHub)...")
 
+
+
         
+
+
 
         for i, url in enumerate(urls_to_try):
 
+
+
             try:
 
+
+
                 if not silent:
+
+
 
                     print(f"[DEBUG] Test CDN {i+1}: {url[:80]}...")
 
+
+
                 
+
+
 
                 # Headers simples pour CDN
 
+
+
                 headers = {
+
+
 
                     'Cache-Control': 'no-cache',
 
+
+
                     'User-Agent': f'VMT-Path-Renamer/{VERSION}',
+
+
 
                     'Accept': 'text/plain'
 
+
+
                 }
 
+
+
                 
+
+
 
                 r = requests.get(url, headers=headers, timeout=10)
 
+
+
                 
+
+
 
                 if r.status_code == 200:
 
+
+
                     latest_version_raw = r.text.strip()
+
+
 
                     # Nettoyer la version (enlever BOM, espaces, retours à la ligne)
 
+
+
                     latest_version_clean = latest_version_raw.replace('\ufeff', '').replace('\r', '').replace('\n', '').strip()
 
+
+
                     if not silent:
+
+
 
                         print(f"[DEBUG] Version trouvée: '{latest_version_clean}' depuis CDN")
 
+
+
                     
+
+
 
                     version_tuple = parse_version(latest_version_clean)
 
+
+
                     if version_tuple > highest_version_tuple:
+
+
 
                         highest_version = latest_version_clean
 
+
+
                         highest_version_tuple = version_tuple
+
+
 
                         highest_version_url = url
 
+
+
                         if not silent:
+
+
 
                             print(f"[DEBUG] Nouvelle version la plus haute: {highest_version}")
 
+
+
                         
+
+
 
                         # Arrêter dès qu'on trouve une version plus récente que la locale
 
+
+
                         if version_tuple > local_version_tuple:
+
+
 
                             if not silent:
 
+
+
                                 print(f"[DEBUG] Version plus récente trouvée depuis CDN, arrêt")
+
+
 
                             break
 
+
+
                 else:
+
+
 
                     if not silent:
 
+
+
                         print(f"[DEBUG] CDN {i+1} - Erreur HTTP {r.status_code}")
+
+
 
                     
 
+
+
             except requests.exceptions.Timeout:
 
+
+
                 if not silent:
+
+
 
                     print(f"[DEBUG] CDN {i+1} - Timeout")
 
+
+
                 continue
+
+
 
             except requests.exceptions.ConnectionError:
 
+
+
                 if not silent:
+
+
 
                     print(f"[DEBUG] CDN {i+1} - Erreur de connexion")
 
+
+
                 continue
+
+
 
             except Exception as e:
 
+
+
                 if not silent:
+
+
 
                     print(f"[DEBUG] CDN {i+1} - Erreur: {e}")
 
+
+
                 continue
+
+
 
                 
 
+
+
             # Petite pause entre les URLs pour éviter le rate limiting
+
+
 
             time.sleep(0.1)
 
+
+
         
+
+
 
         if not highest_version:
 
+
+
             if not silent:
+
+
 
                 print("[INFO] Aucune version récupérée depuis les CDN")
 
+
+
             return "Erreur", False, "Impossible d'accéder aux serveurs de mise à jour"
 
+
+
         
+
+
 
         # Utiliser la version la plus haute trouvée
 
+
+
         if highest_version:
 
+
+
             if not silent:
+
+
 
                 print(f"[DEBUG] Version finale (la plus haute): '{highest_version}' depuis {highest_version_url}")
 
+
+
             
+
+
 
             # Sauvegarder l'URL de la version la plus haute pour le téléchargement
 
+
+
             if highest_version_url:
+
+
 
                 global BEST_UPDATE_URL
 
+
+
                 # Convertir l'URL de version vers l'URL du script
+
+
 
                 if "jsdelivr.net" in highest_version_url:
 
+
+
                     BEST_UPDATE_URL = highest_version_url.replace("version.txt", "test.py")
+
+
 
                 elif "statically.io" in highest_version_url:
 
+
+
                     BEST_UPDATE_URL = highest_version_url.replace("version.txt", "test.py")
+
+
 
                 else:
 
+
+
                     BEST_UPDATE_URL = UPDATE_SCRIPT_URL
+
+
 
                 if not silent:
 
+
+
                     print(f"[DEBUG] URL de téléchargement: {BEST_UPDATE_URL}")
 
+
+
             
+
+
 
             up_to_date = local_version_tuple >= highest_version_tuple
 
+
+
             if not silent:
+
+
 
                 print(f"[DEBUG] À jour: {up_to_date}")
 
+
+
             
+
+
 
             return highest_version, up_to_date, f"Version la plus haute trouvée: {highest_version}"
 
+
+
         else:
+
+
 
             return "Erreur", False, "Aucune version valide trouvée"
 
+
+
         
+
+
 
     except requests.exceptions.Timeout:
 
+
+
         error_msg = "Timeout lors de la vérification de mise à jour"
+
+
 
         print(f"[INFO] {error_msg} - Réessayez plus tard")
 
+
+
         return "Erreur", False, "Timeout réseau - Réessayez dans quelques minutes"
+
+
+
+
 
 
 
@@ -1917,7 +2899,15 @@ def check_update(silent=False):
 
 
 
+
+
+
+
         error_msg = "Erreur de connexion lors de la vérification de mise à jour"
+
+
+
+
 
 
 
@@ -1925,7 +2915,15 @@ def check_update(silent=False):
 
 
 
+
+
+
+
         return "Erreur", False, "Pas de connexion internet"
+
+
+
+
 
 
 
@@ -1933,7 +2931,15 @@ def check_update(silent=False):
 
 
 
+
+
+
+
         error_msg = f"Erreur lors de la vérification de mise à jour: {e}"
+
+
+
+
 
 
 
@@ -1941,7 +2947,15 @@ def check_update(silent=False):
 
 
 
+
+
+
+
         # Seulement créer crash.txt pour les vraies erreurs critiques
+
+
+
+
 
 
 
@@ -1949,11 +2963,43 @@ def check_update(silent=False):
 
 
 
+
+
+
+
             log_crash(error_msg)
 
 
 
+
+
+
+
         return "Erreur", False, f"Erreur technique: {str(e)[:50]}..."
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1993,7 +3039,31 @@ def check_update(silent=False):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
+
+
+
+
+
+
+
+
 
 
 
@@ -2009,7 +3079,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
     try:
+
+
+
+
+
+
+
+
 
 
 
@@ -2025,6 +3111,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         import time
 
 
@@ -2033,7 +3127,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2049,7 +3159,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         vtfedit_paths = [
+
+
+
+
+
+
+
+
 
 
 
@@ -2065,7 +3191,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             "vtfedit.exe",
+
+
+
+
+
+
+
+
 
 
 
@@ -2081,7 +3223,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             os.path.join(os.path.dirname(__file__), "tools", "VTFEdit.exe"),
+
+
+
+
+
+
+
+
 
 
 
@@ -2097,7 +3255,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             r"C:\Program Files\Nem's Tools\VTFEdit\VTFEdit.exe",
+
+
+
+
+
+
+
+
 
 
 
@@ -2113,6 +3287,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         ]
 
 
@@ -2121,7 +3303,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2137,7 +3335,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         for path in vtfedit_paths:
+
+
+
+
+
+
+
+
 
 
 
@@ -2153,7 +3367,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 vtfedit_path = path
+
+
+
+
+
+
+
+
 
 
 
@@ -2169,7 +3399,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2185,6 +3431,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             return False, "VTFEdit.exe non trouvé. Installez VTFEdit ou placez-le dans le dossier."
 
 
@@ -2193,7 +3447,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2209,6 +3479,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
 
@@ -2217,7 +3495,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2233,7 +3527,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         # VTFEdit supporte les arguments en ligne de commande pour l'export
+
+
+
+
+
+
+
+
 
 
 
@@ -2249,7 +3559,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             vtfedit_path,
+
+
+
+
+
+
+
+
 
 
 
@@ -2265,7 +3591,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             "-output", output_path,
+
+
+
+
+
+
+
+
 
 
 
@@ -2281,7 +3623,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             "-silent"  # Mode silencieux sans interface
+
+
+
+
+
+
+
+
 
 
 
@@ -2297,7 +3655,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2313,7 +3687,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         alternative_cmds = [
+
+
+
+
+
+
+
+
 
 
 
@@ -2329,7 +3719,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             [vtfedit_path, "-convert", vtf_path, output_path, "-format:tga"],
+
+
+
+
+
+
+
+
 
 
 
@@ -2345,6 +3751,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         ]
 
 
@@ -2353,7 +3767,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2369,7 +3799,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         try:
+
+
+
+
+
+
+
+
 
 
 
@@ -2385,7 +3831,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 cmd, 
+
+
+
+
+
+
+
+
 
 
 
@@ -2401,7 +3863,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 text=True, 
+
+
+
+
+
+
+
+
 
 
 
@@ -2417,7 +3895,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 creationflags=subprocess.CREATE_NO_WINDOW  # Pas de fenêtre
+
+
+
+
+
+
+
+
 
 
 
@@ -2433,7 +3927,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -2449,6 +3959,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 return True, f"Converti avec VTFEdit: {os.path.basename(vtf_path)}"
 
 
@@ -2457,7 +3975,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -2473,6 +4007,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
             pass
 
 
@@ -2481,7 +4023,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2497,7 +4055,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         for alt_cmd in alternative_cmds:
+
+
+
+
+
+
+
+
 
 
 
@@ -2513,7 +4087,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 result = subprocess.run(
+
+
+
+
+
+
+
+
 
 
 
@@ -2529,7 +4119,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                     capture_output=True, 
+
+
+
+
+
+
+
+
 
 
 
@@ -2545,7 +4151,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                     timeout=30,
+
+
+
+
+
+
+
+
 
 
 
@@ -2561,6 +4183,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 )
 
 
@@ -2569,7 +4199,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -2585,7 +4231,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 time.sleep(0.5)
+
+
+
+
+
+
+
+
 
 
 
@@ -2601,7 +4263,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 if os.path.exists(output_path):
+
+
+
+
+
+
+
+
 
 
 
@@ -2617,7 +4295,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                     
+
+
+
+
+
+
+
+
 
 
 
@@ -2633,6 +4327,14 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
                 continue
 
 
@@ -2641,7 +4343,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2657,7 +4375,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
         return convert_vtf_with_automation(vtf_path, output_path, vtfedit_path)
+
+
+
+
+
+
+
+
 
 
 
@@ -2673,7 +4407,23 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
     except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -2697,7 +4447,31 @@ def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
+
+
+
+
+
+
+
+
 
 
 
@@ -2713,7 +4487,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
     try:
+
+
+
+
+
+
+
+
 
 
 
@@ -2729,6 +4519,14 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
         import time
 
 
@@ -2737,7 +4535,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -2753,7 +4567,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
         process = subprocess.Popen([vtfedit_path], creationflags=subprocess.CREATE_NO_WINDOW)
+
+
+
+
+
+
+
+
 
 
 
@@ -2769,6 +4599,14 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
         
 
 
@@ -2777,7 +4615,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
         try:
+
+
+
+
+
+
+
+
 
 
 
@@ -2793,6 +4647,14 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             import pyautogui
 
 
@@ -2801,7 +4663,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -2817,7 +4695,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             pyautogui.hotkey('ctrl', 'o')
+
+
+
+
+
+
+
+
 
 
 
@@ -2833,7 +4727,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -2849,7 +4759,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             pyautogui.write(vtf_path)
+
+
+
+
+
+
+
+
 
 
 
@@ -2865,6 +4791,14 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             time.sleep(2)
 
 
@@ -2873,7 +4807,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -2889,7 +4839,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             pyautogui.hotkey('ctrl', 'e')
+
+
+
+
+
+
+
+
 
 
 
@@ -2905,7 +4871,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -2921,7 +4903,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             pyautogui.write(output_path)
+
+
+
+
+
+
+
+
 
 
 
@@ -2937,6 +4935,14 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             time.sleep(2)
 
 
@@ -2945,7 +4951,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -2961,11 +4983,27 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
             pyautogui.hotkey('alt', 'f4')
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -2973,7 +5011,15 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
                 return True, f"Converti avec automation: {os.path.basename(vtf_path)}"
+
+
+
+
 
 
 
@@ -2981,7 +5027,15 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
                 return False, "Automation échouée - fichier non créé"
+
+
+
+
 
 
 
@@ -2989,7 +5043,15 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
         except ImportError:
+
+
+
+
 
 
 
@@ -2997,7 +5059,15 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
             process.terminate()
+
+
+
+
 
 
 
@@ -3005,7 +5075,15 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
         except Exception as e:
+
+
+
+
 
 
 
@@ -3013,7 +5091,15 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
             return False, f"Erreur automation: {e}"
+
+
+
+
 
 
 
@@ -3021,11 +5107,27 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
     except Exception as e:
 
 
 
+
+
+
+
         return False, f"Erreur lancement VTFEdit: {e}"
+
+
+
+
+
+
+
+
 
 
 
@@ -3041,7 +5143,23 @@ def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
 
 
 
+
+
+
+
+
+
+
+
 def read_file(path):
+
+
+
+
+
+
+
+
 
 
 
@@ -3057,7 +5175,23 @@ def read_file(path):
 
 
 
+
+
+
+
+
+
+
+
         try:
+
+
+
+
+
+
+
+
 
 
 
@@ -3073,7 +5207,23 @@ def read_file(path):
 
 
 
+
+
+
+
+
+
+
+
                 return f.read(), enc
+
+
+
+
+
+
+
+
 
 
 
@@ -3089,7 +5239,23 @@ def read_file(path):
 
 
 
+
+
+
+
+
+
+
+
             continue
+
+
+
+
+
+
+
+
 
 
 
@@ -3113,7 +5279,31 @@ def read_file(path):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
+
+
+
+
+
+
+
+
 
 
 
@@ -3129,7 +5319,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
     any_quoted = re.compile(r'(["\'])([^"\']*[/\\][^"\']*)\1')
+
+
+
+
+
+
+
+
 
 
 
@@ -3145,7 +5351,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
     vmt_dirs = set()
+
+
+
+
+
+
+
+
 
 
 
@@ -3161,7 +5383,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
         for fname in files:
+
+
+
+
+
+
+
+
 
 
 
@@ -3177,7 +5415,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 continue
+
+
+
+
+
+
+
+
 
 
 
@@ -3193,7 +5447,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
             vmt_dirs.add(root)
+
+
+
+
+
+
+
+
 
 
 
@@ -3209,7 +5479,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 content, enc = read_file(fullpath)
+
+
+
+
+
+
+
+
 
 
 
@@ -3225,7 +5511,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 log_widget.append(f"[ERREUR LECTURE] {fullpath} -> {e}")
+
+
+
+
+
+
+
+
 
 
 
@@ -3241,7 +5543,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
             lines = content.splitlines(keepends=True)
+
+
+
+
+
+
+
+
 
 
 
@@ -3257,7 +5575,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
             file_changes = []
+
+
+
+
+
+
+
+
 
 
 
@@ -3273,7 +5607,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 stripped = line.lstrip()
+
+
+
+
+
+
+
+
 
 
 
@@ -3289,7 +5639,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                     new_lines.append(line)
+
+
+
+
+
+
+
+
 
 
 
@@ -3305,7 +5671,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 def repl_auto(m):
+
+
+
+
+
+
+
+
 
 
 
@@ -3321,7 +5703,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                     parts = pathval.split('/')
+
+
+
+
+
+
+
+
 
 
 
@@ -3337,7 +5735,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                         newpath = NEW_PATH + '/' + parts[-1]
+
+
+
+
+
+
+
+
 
 
 
@@ -3353,6 +5767,14 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                         return key + quote + newpath + quote
 
 
@@ -3361,7 +5783,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                     return m.group(0)
+
+
+
+
+
+
+
+
 
 
 
@@ -3377,7 +5815,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                     quote, pathval = m.group(1), m.group(2).replace('\\','/')
+
+
+
+
+
+
+
+
 
 
 
@@ -3393,7 +5847,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                     if len(parts) > 1:
+
+
+
+
+
+
+
+
 
 
 
@@ -3409,7 +5879,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                         file_changes.append(("<any>", pathval, newpath))
+
+
+
+
+
+
+
+
 
 
 
@@ -3425,7 +5911,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                     return m.group(0)
+
+
+
+
+
+
+
+
 
 
 
@@ -3441,7 +5943,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 line_mod = any_quoted.sub(repl_any_auto, line_mod)
+
+
+
+
+
+
+
+
 
 
 
@@ -3457,6 +5975,14 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
             if file_changes:
 
 
@@ -3465,7 +5991,23 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 modified_vmt_files.append((fullpath, new_lines, enc, file_changes))
+
+
+
+
+
+
+
+
 
 
 
@@ -3489,7 +6031,31 @@ def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def apply_vmt_changes(modified_vmt_files, log_widget):
+
+
+
+
+
+
+
+
 
 
 
@@ -3505,7 +6071,23 @@ def apply_vmt_changes(modified_vmt_files, log_widget):
 
 
 
+
+
+
+
+
+
+
+
         try:
+
+
+
+
+
+
+
+
 
 
 
@@ -3521,7 +6103,23 @@ def apply_vmt_changes(modified_vmt_files, log_widget):
 
 
 
+
+
+
+
+
+
+
+
                 f.write(''.join(new_lines))
+
+
+
+
+
+
+
+
 
 
 
@@ -3537,7 +6135,23 @@ def apply_vmt_changes(modified_vmt_files, log_widget):
 
 
 
+
+
+
+
+
+
+
+
         except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -3561,7 +6175,31 @@ def apply_vmt_changes(modified_vmt_files, log_widget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
+
+
+
+
+
+
+
+
 
 
 
@@ -3577,7 +6215,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
         base_name = os.path.basename(new)
+
+
+
+
+
+
+
+
 
 
 
@@ -3593,7 +6247,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
         new_name = os.path.join(parent_dir, f"{prefix_suffix}{base_name}")
+
+
+
+
+
+
+
+
 
 
 
@@ -3609,7 +6279,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
             os.makedirs(os.path.dirname(new_name), exist_ok=True)
+
+
+
+
+
+
+
+
 
 
 
@@ -3625,7 +6311,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
                 for name in os.listdir(old):
+
+
+
+
+
+
+
+
 
 
 
@@ -3641,7 +6343,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
                     dst = os.path.join(new_name, name)
+
+
+
+
+
+
+
+
 
 
 
@@ -3657,7 +6375,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
                 try:
+
+
+
+
+
+
+
+
 
 
 
@@ -3673,7 +6407,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
                 except OSError:
+
+
+
+
+
+
+
+
 
 
 
@@ -3689,7 +6439,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
                 log_widget.append(f"[DOSSIER FUSIONNÉ] {old} -> {new_name}")
+
+
+
+
+
+
+
+
 
 
 
@@ -3705,7 +6471,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
                 shutil.move(old, new_name)
+
+
+
+
+
+
+
+
 
 
 
@@ -3721,7 +6503,23 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
         except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -3745,7 +6543,31 @@ def apply_dirs_changes(dirs_to_rename, log_widget, prefix_suffix=""):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ------------------ Interface principale ------------------
+
+
+
+
+
+
+
+
 
 
 
@@ -3761,7 +6583,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
     def __init__(self):
+
+
+
+
+
+
+
+
 
 
 
@@ -3777,7 +6615,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.setWindowTitle("SAK VMT RENAME ETC ")
+
+
+
+
+
+
+
+
 
 
 
@@ -3793,7 +6647,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.init_ui()
+
+
+
+
+
+
+
+
 
 
 
@@ -3805,7 +6675,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -3813,7 +6691,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.update_timer = QTimer()
+
+
+
+
 
 
 
@@ -3821,11 +6707,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.update_timer.start(15 * 60 * 1000)  # 15 minutes en millisecondes
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -3833,7 +6731,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.countdown_timer = QTimer()
+
+
+
+
 
 
 
@@ -3841,7 +6747,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.countdown_timer.start(1000)  # 1 seconde
+
+
+
+
 
 
 
@@ -3849,11 +6763,27 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         # Variables pour le countdown
 
 
 
+
+
+
+
         self.next_check_time = time.time() + (15 * 60)  # 15 minutes à partir de maintenant
+
+
+
+
+
+
+
+
 
 
 
@@ -3869,7 +6799,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         layout = QVBoxLayout()
+
+
+
+
+
+
+
+
 
 
 
@@ -3881,7 +6827,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         update_layout = QHBoxLayout()
+
+
+
+
 
 
 
@@ -3889,7 +6843,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.check_update_btn = QPushButton("🔄 Vérifier")
+
+
+
+
 
 
 
@@ -3897,7 +6859,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.debug_btn = QPushButton("🐛 Debug GitHub")
+
+
+
+
 
 
 
@@ -3905,7 +6875,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.test_local_btn = QPushButton("🧪 Test Local")
+
+
+
+
 
 
 
@@ -3913,7 +6891,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.force_check_btn = QPushButton("⚡ Force Check")
+
+
+
+
 
 
 
@@ -3921,7 +6907,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.ultra_check_btn = QPushButton("🚀 Ultra Check")
+
+
+
+
 
 
 
@@ -3929,7 +6923,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.connection_test_btn = QPushButton("🌐 Test Connexion")
+
+
+
+
 
 
 
@@ -3937,7 +6939,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.update_btn = QPushButton("⬇️ Télécharger mise à jour")
+
+
+
+
 
 
 
@@ -3945,7 +6955,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.update_btn.clicked.connect(self.download_update)
+
+
+
+
 
 
 
@@ -3953,7 +6971,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         update_layout.addWidget(self.check_update_btn)
+
+
+
+
 
 
 
@@ -3961,7 +6987,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         update_layout.addWidget(self.test_local_btn)
+
+
+
+
 
 
 
@@ -3969,7 +7003,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         update_layout.addWidget(self.ultra_check_btn)
+
+
+
+
 
 
 
@@ -3977,11 +7019,35 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         update_layout.addWidget(self.update_btn)
 
 
 
+
+
+
+
         layout.addLayout(update_layout)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4005,7 +7071,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             btn = QPushButton(text)
+
+
+
+
+
+
+
+
 
 
 
@@ -4021,7 +7103,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             btn.setStyleSheet("""
+
+
+
+
+
+
+
+
 
 
 
@@ -4037,7 +7135,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                     background-color: #990000;
+
+
+
+
+
+
+
+
 
 
 
@@ -4053,7 +7167,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                     font-weight: bold;
+
+
+
+
+
+
+
+
 
 
 
@@ -4069,7 +7199,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                     padding: 12px 20px;
+
+
+
+
+
+
+
+
 
 
 
@@ -4085,7 +7231,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 }
+
+
+
+
+
+
+
+
 
 
 
@@ -4101,7 +7263,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                     background-color: #FF3333;
+
+
+
+
+
+
+
+
 
 
 
@@ -4117,7 +7295,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             """)
+
+
+
+
+
+
+
+
 
 
 
@@ -4141,7 +7335,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Dossier
+
+
+
+
+
+
+
+
 
 
 
@@ -4157,7 +7375,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         folder_layout = QHBoxLayout()
+
+
+
+
+
+
+
+
 
 
 
@@ -4173,7 +7407,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.folder_entry.setPlaceholderText("Ex: C:/Jeu/materials")
+
+
+
+
+
+
+
+
 
 
 
@@ -4189,7 +7439,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         browse_btn.clicked.connect(self.browse_folder)
+
+
+
+
+
+
+
+
 
 
 
@@ -4205,6 +7471,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         folder_layout.addWidget(browse_btn)
 
 
@@ -4213,7 +7487,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         folder_group.setLayout(folder_layout)
+
+
+
+
+
+
+
+
 
 
 
@@ -4237,7 +7527,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Nouveau chemin
+
+
+
+
+
+
+
+
 
 
 
@@ -4253,7 +7567,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         path_layout = QHBoxLayout()
+
+
+
+
+
+
+
+
 
 
 
@@ -4269,7 +7599,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.path_entry.setPlaceholderText("Ex: models/nrxa/mayd3")
+
+
+
+
+
+
+
+
 
 
 
@@ -4285,7 +7631,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         path_group.setLayout(path_layout)
+
+
+
+
+
+
+
+
 
 
 
@@ -4309,7 +7671,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Préfixe/Suffixe
+
+
+
+
+
+
+
+
 
 
 
@@ -4325,7 +7711,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         prefix_layout = QHBoxLayout()
+
+
+
+
+
+
+
+
 
 
 
@@ -4341,7 +7743,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.prefix_entry.setPlaceholderText("Ex: nrxa_ ou _new")
+
+
+
+
+
+
+
+
 
 
 
@@ -4357,7 +7775,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         prefix_group.setLayout(prefix_layout)
+
+
+
+
+
+
+
+
 
 
 
@@ -4381,7 +7815,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Actions
+
+
+
+
+
+
+
+
 
 
 
@@ -4397,7 +7855,19 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         action_layout = QVBoxLayout()
+
+
+
+
 
 
 
@@ -4405,11 +7875,27 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         # Première ligne d'actions
 
 
 
+
+
+
+
         action_layout1 = QHBoxLayout()
+
+
+
+
+
+
+
+
 
 
 
@@ -4425,7 +7911,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.run_rename_btn = styled_button("📦 Renommer dossiers")
+
+
+
+
+
+
+
+
 
 
 
@@ -4441,7 +7943,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.reset_btn = styled_button("♻️ Reset")
+
+
+
+
+
+
+
+
 
 
 
@@ -4457,6 +7975,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                           (self.scan_btn, self.scan_vmt_dirs), (self.reset_btn, self.reset_fields)]:
 
 
@@ -4465,7 +7991,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             btn.clicked.connect(func)
+
+
+
+
+
+
+
+
 
 
 
@@ -4477,11 +8019,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
 
 
 
+
+
+
+
         # Deuxième ligne d'actions
+
+
+
+
 
 
 
@@ -4493,11 +8047,27 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.apply_move_btn = styled_button("✅ Déplacer VMT/VTF")
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -4509,7 +8079,19 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         for btn, func in [(self.apply_move_btn, self.apply_move_vmt_vtf),
+
+
+
+
 
 
 
@@ -4521,7 +8103,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             btn.clicked.connect(func)
+
+
+
+
+
+
+
+
 
 
 
@@ -4537,7 +8135,19 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         action_layout.addLayout(action_layout1)
+
+
+
+
 
 
 
@@ -4545,7 +8155,19 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         action_group.setLayout(action_layout)
+
+
+
+
+
+
+
+
 
 
 
@@ -4569,7 +8191,27 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Logs
+
+
+
+
 
 
 
@@ -4577,7 +8219,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         log_layout.addWidget(QLabel("Journal d'activité"))
+
+
+
+
 
 
 
@@ -4585,7 +8235,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         clear_logs_btn.clicked.connect(self.clear_logs)
+
+
+
+
 
 
 
@@ -4593,7 +8251,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         layout.addLayout(log_layout)
+
+
+
+
 
 
 
@@ -4601,11 +8267,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.log_widget = QTextEdit()
 
 
 
+
+
+
+
         self.log_widget.setReadOnly(True)
+
+
+
+
 
 
 
@@ -4625,7 +8303,27 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         # Dossiers détectés
+
+
+
+
 
 
 
@@ -4633,7 +8331,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.detected_dirs_widget = QTextEdit()
+
+
+
+
 
 
 
@@ -4645,7 +8351,19 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         # Timer countdown en bas à gauche
+
+
+
+
 
 
 
@@ -4653,7 +8371,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.countdown_label = QLabel("⏱️ Prochaine vérification dans: 15:00")
+
+
+
+
 
 
 
@@ -4661,33 +8387,71 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         countdown_layout.addWidget(self.countdown_label)
 
 
 
+
+
+
+
         # Bouton Changelog
+
         self.changelog_btn = QPushButton("📋 Changelog")
+
         self.changelog_btn.clicked.connect(self.show_changelog)
+
         self.changelog_btn.setStyleSheet("""
+
             QPushButton {
+
                 background-color: #444;
+
                 color: white;
+
                 font-weight: bold;
+
                 padding: 5px 10px;
+
                 border-radius: 3px;
+
                 border: none;
+
                 font-size: 9px;
+
                 margin-left: 10px;
+
             }
+
             QPushButton:hover { background-color: #666; }
+
         """)
+
         countdown_layout.addWidget(self.changelog_btn)
+
+
 
         countdown_layout.addStretch()  # Pousse le label vers la gauche
 
 
 
+
+
+
+
         layout.addLayout(countdown_layout)
+
+
+
+
+
+
+
+
 
 
 
@@ -4703,7 +8467,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.setStyleSheet("""
+
+
+
+
+
+
+
+
 
 
 
@@ -4719,6 +8499,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 background-color: #111;
 
 
@@ -4727,7 +8515,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 color: #FFF;
+
+
+
+
+
+
+
+
 
 
 
@@ -4743,6 +8547,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 font-size: 14px;
 
 
@@ -4751,7 +8563,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4767,7 +8595,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 border: 2px solid #990000;
+
+
+
+
+
+
+
+
 
 
 
@@ -4783,7 +8627,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 margin-top: 12px;
+
+
+
+
+
+
+
+
 
 
 
@@ -4799,7 +8659,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 font-weight: bold;
+
+
+
+
+
+
+
+
 
 
 
@@ -4815,7 +8691,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4831,7 +8723,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 color: #FF3333;
+
+
+
+
+
+
+
+
 
 
 
@@ -4847,7 +8755,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4863,7 +8787,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 background-color: #222;
+
+
+
+
+
+
+
+
 
 
 
@@ -4879,7 +8819,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 border: 1px solid #333;
+
+
+
+
+
+
+
+
 
 
 
@@ -4895,6 +8851,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 padding: 6px 8px;
 
 
@@ -4903,7 +8867,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4919,7 +8899,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 color: #FF6666;
+
+
+
+
+
+
+
+
 
 
 
@@ -4935,7 +8931,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         """)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4959,7 +8979,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
     def browse_folder(self):
+
+
+
+
+
+
+
+
 
 
 
@@ -4975,7 +9011,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         if folder:
+
+
+
+
+
+
+
+
 
 
 
@@ -4999,7 +9051,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def reset_fields(self):
+
+
+
+
+
+
+
+
 
 
 
@@ -5015,7 +9091,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.path_entry.clear()
+
+
+
+
+
+
+
+
 
 
 
@@ -5031,11 +9123,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.detected_dirs_widget.clear()
 
 
 
+
+
+
+
         self.log_widget.clear()
+
+
+
+
+
+
+
+
 
 
 
@@ -5047,7 +9159,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         """Efface le journal d'activité"""
+
+
+
+
 
 
 
@@ -5055,7 +9175,27 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.log_widget.append("🗑️ Journal effacé")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5079,7 +9219,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.detected_dirs_widget.clear()
+
+
+
+
+
+
+
+
 
 
 
@@ -5095,7 +9251,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         if not os.path.isdir(MATERIALS_DIR):
+
+
+
+
+
+
+
+
 
 
 
@@ -5111,7 +9283,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             return
+
+
+
+
+
+
+
+
 
 
 
@@ -5127,7 +9315,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         for root, _, files in os.walk(MATERIALS_DIR):
+
+
+
+
+
+
+
+
 
 
 
@@ -5143,7 +9347,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 vmt_dirs.add(root)
+
+
+
+
+
+
+
+
 
 
 
@@ -5159,7 +9379,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             self.detected_dirs_widget.append(d)
+
+
+
+
+
+
+
+
 
 
 
@@ -5183,7 +9419,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def run_vmt(self):
+
+
+
+
+
+
+
+
 
 
 
@@ -5199,7 +9459,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         MATERIALS_DIR = self.folder_entry.text().strip()
+
+
+
+
+
+
+
+
 
 
 
@@ -5215,7 +9491,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         if not os.path.isdir(MATERIALS_DIR) or not NEW_PATH:
+
+
+
+
+
+
+
+
 
 
 
@@ -5231,7 +9523,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             return
+
+
+
+
+
+
+
+
 
 
 
@@ -5247,6 +9555,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         vmt_dirs, modified_vmt_files = replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, self.log_widget)
 
 
@@ -5255,7 +9571,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         apply_vmt_changes(modified_vmt_files, self.log_widget)
+
+
+
+
+
+
+
+
 
 
 
@@ -5279,7 +9611,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def run_rename(self):
+
+
+
+
+
+
+
+
 
 
 
@@ -5295,7 +9651,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         prefix_suffix = self.prefix_entry.text().strip()
+
+
+
+
+
+
+
+
 
 
 
@@ -5311,7 +9683,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                           for line in self.detected_dirs_widget.toPlainText().splitlines()
+
+
+
+
+
+
+
+
 
 
 
@@ -5327,7 +9715,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         if not dirs_to_rename:
+
+
+
+
+
+
+
+
 
 
 
@@ -5343,6 +9747,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             return
 
 
@@ -5351,7 +9763,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         apply_dirs_changes(dirs_to_rename, self.log_widget, prefix_suffix=prefix_suffix)
+
+
+
+
+
+
+
+
 
 
 
@@ -5375,7 +9803,31 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     def apply_move_vmt_vtf(self):
+
+
+
+
+
+
+
+
 
 
 
@@ -5391,7 +9843,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         target_dir = QFileDialog.getExistingDirectory(self, "Choisir le dossier de destination")
+
+
+
+
+
+
+
+
 
 
 
@@ -5407,6 +9875,14 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             self.log_widget.append("[ANNULÉ] Aucun dossier choisi.")
 
 
@@ -5415,7 +9891,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             return
+
+
+
+
+
+
+
+
 
 
 
@@ -5431,7 +9923,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         for line in self.detected_dirs_widget.toPlainText().splitlines():
+
+
+
+
+
+
+
+
 
 
 
@@ -5447,7 +9955,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             if not old_dir or not os.path.exists(old_dir):
+
+
+
+
+
+
+
+
 
 
 
@@ -5463,7 +9987,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             base_name = os.path.basename(old_dir)
+
+
+
+
+
+
+
+
 
 
 
@@ -5479,7 +10019,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
             os.makedirs(dest_dir, exist_ok=True)
+
+
+
+
+
+
+
+
 
 
 
@@ -5495,7 +10051,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                 for fname in os.listdir(old_dir):
+
+
+
+
+
+
+
+
 
 
 
@@ -5511,7 +10083,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                         src = os.path.join(old_dir, fname)
+
+
+
+
+
+
+
+
 
 
 
@@ -5527,7 +10115,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
                         shutil.move(src, dst)
+
+
+
+
+
+
+
+
 
 
 
@@ -5543,7 +10147,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=== Déplacement VMT/VTF terminé ===")
+
+
+
+
+
+
+
+
 
 
 
@@ -5555,7 +10175,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         """Convertir des fichiers VTF en TGA avec VTFEdit"""
+
+
+
+
 
 
 
@@ -5563,7 +10191,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5571,11 +10207,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         vtf_files, _ = QFileDialog.getOpenFileNames(
 
 
 
+
+
+
+
             self, 
+
+
+
+
 
 
 
@@ -5583,7 +10231,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             "",
+
+
+
+
 
 
 
@@ -5591,11 +10247,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         )
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5603,7 +10271,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             self.log_widget.append("[ANNULÉ] Aucun fichier VTF sélectionné.")
+
+
+
+
 
 
 
@@ -5611,7 +10287,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5619,7 +10303,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5627,7 +10319,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         output_dir = QFileDialog.getExistingDirectory(
+
+
+
+
 
 
 
@@ -5635,7 +10335,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             "Choisir le dossier de destination pour les fichiers TGA"
+
+
+
+
 
 
 
@@ -5643,7 +10351,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5651,7 +10367,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             self.log_widget.append("[ANNULÉ] Aucun dossier de destination choisi.")
+
+
+
+
 
 
 
@@ -5659,7 +10383,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5667,11 +10399,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.log_widget.append("[INFO] Format: TGA (via VTFEdit)")
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5679,7 +10423,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         success_count = 0
+
+
+
+
 
 
 
@@ -5687,7 +10439,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5695,7 +10455,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             try:
+
+
+
+
 
 
 
@@ -5703,7 +10471,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 base_name = os.path.splitext(os.path.basename(vtf_file))[0]
+
+
+
+
 
 
 
@@ -5711,7 +10487,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -5719,7 +10503,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -5727,7 +10519,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 success, message = convert_vtf_to_tga_with_vtfedit(vtf_file, output_file)
+
+
+
+
 
 
 
@@ -5735,7 +10535,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 if success:
+
+
+
+
 
 
 
@@ -5743,7 +10551,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                     success_count += 1
+
+
+
+
 
 
 
@@ -5751,7 +10567,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                     self.log_widget.append(f"[❌ ERREUR] {message}")
+
+
+
+
 
 
 
@@ -5759,7 +10583,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                     
+
+
+
+
 
 
 
@@ -5767,7 +10599,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.log_widget.append(f"[❌ ERREUR] {os.path.basename(vtf_file)}: {e}")
+
+
+
+
 
 
 
@@ -5775,7 +10615,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5783,7 +10631,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.log_widget.append("=" * 50)
+
+
+
+
 
 
 
@@ -5791,7 +10647,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.log_widget.append(f"  ✅ Succès: {success_count}")
+
+
+
+
 
 
 
@@ -5799,7 +10663,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.log_widget.append(f"  📁 Dossier: {output_dir}")
+
+
+
+
 
 
 
@@ -5807,7 +10679,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -5815,7 +10695,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         if success_count > 0:
+
+
+
+
 
 
 
@@ -5823,7 +10711,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self, 
+
+
+
+
 
 
 
@@ -5831,7 +10727,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 f"Conversion VTF->TGA réussie !\n\n"
+
+
+
+
 
 
 
@@ -5839,7 +10743,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 f"❌ {error_count} erreurs\n\n"
+
+
+
+
 
 
 
@@ -5847,11 +10759,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 f"Les fichiers VTF originaux sont conservés."
 
 
 
+
+
+
+
             )
+
+
+
+
 
 
 
@@ -5859,7 +10783,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             QMessageBox.warning(
+
+
+
+
 
 
 
@@ -5867,7 +10799,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 "Conversion échouée",
+
+
+
+
 
 
 
@@ -5875,7 +10815,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 f"Vérifiez que vous avez:\n"
+
+
+
+
 
 
 
@@ -5883,7 +10831,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 f"- Ou pyautogui: pip install pyautogui\n\n"
+
+
+
+
 
 
 
@@ -5891,7 +10847,27 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5911,7 +10887,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
     def manual_check_update(self):
+
+
+
+
 
 
 
@@ -5919,7 +10903,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.log_widget.append("🔄 Vérification manuelle des mises à jour...")
+
+
+
+
 
 
 
@@ -5927,7 +10919,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         self.check_update_btn.setText("🔄 Vérification...")
+
+
+
+
 
 
 
@@ -5935,7 +10935,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         try:
+
+
+
+
 
 
 
@@ -5943,7 +10951,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -5951,11 +10967,23 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
 
 
 
+
+
+
+
                 self.update_btn.setEnabled(False)
+
+
+
+
 
 
 
@@ -5963,7 +10991,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 # Pas de popup pour les erreurs réseau - juste les logs
+
+
+
+
 
 
 
@@ -5971,7 +11007,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                     QMessageBox.warning(self, "Erreur mise à jour",
+
+
+
+
 
 
 
@@ -5979,7 +11023,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                                         f"Détails: {error_msg}")
+
+
+
+
 
 
 
@@ -5987,7 +11039,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.update_label.setText(f"✅ Application à jour ({VERSION})")
+
+
+
+
 
 
 
@@ -5995,7 +11055,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.log_widget.append(f"✅ Version actuelle: {VERSION} (à jour)")
+
+
+
+
 
 
 
@@ -6003,7 +11071,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.update_label.setText(f"❌ Nouvelle version disponible ({latest_version})")
+
+
+
+
 
 
 
@@ -6011,7 +11087,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.log_widget.append(f"⬇️ Nouvelle version disponible: {latest_version}")
+
+
+
+
 
 
 
@@ -6019,8 +11103,17 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 # Forcer l'installation de la mise à jour
+
                 self.force_update_installation(latest_version)
+
+
+
+
 
 
 
@@ -6028,7 +11121,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             self.check_update_btn.setEnabled(True)
+
+
+
+
 
 
 
@@ -6040,7 +11141,19 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
     def silent_check_update(self):
+
+
+
+
 
 
 
@@ -6048,7 +11161,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         try:
+
+
+
+
 
 
 
@@ -6056,7 +11177,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6064,7 +11193,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 # Mise à jour détectée - mettre à jour l'interface
+
+
+
+
 
 
 
@@ -6072,7 +11209,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.update_btn.setEnabled(True)
+
+
+
+
 
 
 
@@ -6080,7 +11225,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 import datetime
+
+
+
+
 
 
 
@@ -6088,10 +11241,21 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 self.log_widget.append(f"[{current_time}] 🔔 Mise à jour détectée automatiquement: {latest_version}")
+
                 
+
                 # Forcer l'installation même en mode silencieux
+
                 self.force_update_installation(latest_version)
+
+
+
+
 
 
 
@@ -6099,7 +11263,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                 # Application à jour - mettre à jour le statut si nécessaire
+
+
+
+
 
 
 
@@ -6107,7 +11279,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
                     self.update_label.setText(f"✅ Application à jour ({VERSION})")
+
+
+
+
 
 
 
@@ -6115,7 +11295,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
         except Exception:
+
+
+
+
 
 
 
@@ -6123,7 +11311,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             pass
+
+
+
+
 
 
 
@@ -6131,7 +11327,15 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
             # Réinitialiser le timer pour le prochain check dans 15 minutes
+
+
+
+
 
 
 
@@ -6143,79 +11347,163 @@ class VMTPathRenamer(QWidget):
 
 
 
+
+
+
+
+
+
+
+
     def force_update_installation(self, latest_version):
+
         """Force l'utilisateur à installer la mise à jour"""
+
         # Désactiver toute l'interface
+
         self.setEnabled(False)
+
         
+
         # Créer une boîte de dialogue modale obligatoire
+
         msg_box = QMessageBox(self)
+
         msg_box.setWindowTitle("⚠️ Mise à jour obligatoire")
+
         msg_box.setIcon(QMessageBox.Warning)
+
         msg_box.setText(f"""
+
 🔄 MISE À JOUR OBLIGATOIRE DÉTECTÉE
+
+
 
 Une nouvelle version est disponible et doit être installée.
 
+
+
 Version actuelle: {VERSION}
+
 Nouvelle version: {latest_version}
 
+
+
 L'application sera fermée après l'installation.
+
 Vous devez redémarrer manuellement après la mise à jour.
 
+
+
 Cliquez sur "Installer" pour continuer.
+
         """)
+
         
+
         # Seul bouton disponible : Installer
+
         install_btn = msg_box.addButton("🔄 Installer maintenant", QMessageBox.AcceptRole)
+
         msg_box.setDefaultButton(install_btn)
+
         
+
         # Empêcher la fermeture de la boîte de dialogue
+
         msg_box.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint)
+
         
+
         # Style de la boîte de dialogue
+
         msg_box.setStyleSheet("""
+
             QMessageBox {
+
                 background-color: #222;
+
                 color: white;
+
                 font-family: 'Segoe UI';
+
                 font-size: 12px;
+
             }
+
             QMessageBox QLabel {
+
                 color: white;
+
                 background-color: transparent;
+
                 padding: 10px;
+
             }
+
             QMessageBox QPushButton {
+
                 background-color: #e50914;
+
                 color: white;
+
                 font-weight: bold;
+
                 padding: 10px 20px;
+
                 border-radius: 5px;
+
                 border: none;
+
                 min-width: 120px;
+
                 font-size: 12px;
+
             }
+
             QMessageBox QPushButton:hover {
+
                 background-color: #f40612;
+
             }
+
         """)
+
         
+
         # Afficher la boîte de dialogue et attendre la réponse
+
         result = msg_box.exec_()
+
         
+
         # Lancer le téléchargement et l'installation
+
         if result == QMessageBox.AcceptRole:
+
             self.download_update()
+
             # Fermer l'application après l'installation
+
             QApplication.quit()
+
     
+
     def show_changelog(self):
+
         """Ouvrir la fenêtre changelog"""
+
         changelog_dialog = ChangelogDialog()
+
         changelog_dialog.exec_()
+
     
+
     def update_countdown_display(self):
+
+
+
+
 
 
 
@@ -6223,7 +11511,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         try:
+
+
+
+
 
 
 
@@ -6231,7 +11527,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6239,7 +11543,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 self.countdown_label.setText("⏱️ Vérification en cours...")
+
+
+
+
 
 
 
@@ -6247,7 +11559,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6255,7 +11575,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             seconds = remaining_seconds % 60
+
+
+
+
 
 
 
@@ -6263,7 +11591,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.countdown_label.setText(f"⏱️ Prochaine vérification dans: {minutes:02d}:{seconds:02d}")
+
+
+
+
 
 
 
@@ -6271,7 +11607,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             # En cas d'erreur, afficher un message par défaut
+
+
+
+
 
 
 
@@ -6283,7 +11627,19 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
     def download_update(self):
+
+
+
+
 
 
 
@@ -6291,11 +11647,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             global BEST_UPDATE_URL
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6303,7 +11671,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             download_urls = []
+
+
+
+
 
 
 
@@ -6311,11 +11687,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 download_urls.append(BEST_UPDATE_URL)
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6323,7 +11711,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             jsdelivr_script = UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/")
+
+
+
+
 
 
 
@@ -6331,7 +11727,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6339,7 +11743,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 jsdelivr_script,
+
+
+
+
 
 
 
@@ -6347,7 +11759,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 UPDATE_SCRIPT_URL
+
+
+
+
 
 
 
@@ -6355,11 +11775,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
 
 
 
+
+
+
+
             self.log_widget.append("=" * 50)
+
+
+
+
 
 
 
@@ -6367,7 +11799,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append("=" * 50)
+
+
+
+
 
 
 
@@ -6375,7 +11815,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6383,7 +11831,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.update_btn.setEnabled(False)
+
+
+
+
 
 
 
@@ -6391,7 +11847,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6399,7 +11863,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             script_content = None
+
+
+
+
 
 
 
@@ -6407,7 +11879,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6415,7 +11895,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 try:
+
+
+
+
 
 
 
@@ -6423,7 +11911,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     r = requests.get(url, timeout=15)
+
+
+
+
 
 
 
@@ -6431,7 +11927,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     
+
+
+
+
 
 
 
@@ -6439,7 +11943,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         script_content = r.text
+
+
+
+
 
 
 
@@ -6447,7 +11959,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         self.log_widget.append(f"[MAJ] ✅ Téléchargement réussi depuis: {url}")
+
+
+
+
 
 
 
@@ -6455,7 +11975,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     else:
+
+
+
+
 
 
 
@@ -6463,7 +11991,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         
+
+
+
+
 
 
 
@@ -6471,7 +12007,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"[MAJ] ❌ Échec: {e}")
+
+
+
+
 
 
 
@@ -6479,7 +12023,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6487,11 +12039,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 raise Exception("Impossible de télécharger depuis aucune URL")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6499,11 +12063,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"[MAJ] Source: {successful_url}")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6511,11 +12087,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"[MAJ] Chemin du script: {script_path}")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6523,7 +12111,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             script_dir = os.path.dirname(script_path)
+
+
+
+
 
 
 
@@ -6531,11 +12127,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 raise Exception(f"Pas de permission d'écriture dans: {script_dir}")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6543,11 +12151,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 raise Exception(f"Pas de permission d'écriture sur: {script_path}")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6555,7 +12175,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             with open(script_path, "w", encoding="utf-8") as f:
+
+
+
+
 
 
 
@@ -6563,7 +12191,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6571,11 +12207,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append("[MAJ] 🔄 Redémarrage de l'application...")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6583,7 +12231,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                                     "✅ Nouvelle version installée avec succès !\n\n"
+
+
+
+
 
 
 
@@ -6591,7 +12247,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6599,7 +12263,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             python = sys.executable
+
+
+
+
 
 
 
@@ -6607,7 +12279,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6615,11 +12295,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             error_msg = f"Permission refusée: {e}\n\nEssayez de:\n1. Fermer l'antivirus temporairement\n2. Exécuter en tant qu'administrateur\n3. Déplacer l'application dans un autre dossier"
 
 
 
+
+
+
+
             self.log_widget.append(f"[MAJ] ❌ {error_msg}")
+
+
+
+
 
 
 
@@ -6627,7 +12319,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         except requests.exceptions.Timeout:
+
+
+
+
 
 
 
@@ -6635,7 +12335,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"[MAJ] ❌ {error_msg}")
+
+
+
+
 
 
 
@@ -6643,7 +12351,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         except requests.exceptions.ConnectionError:
+
+
+
+
 
 
 
@@ -6651,7 +12367,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"[MAJ] ❌ {error_msg}")
+
+
+
+
 
 
 
@@ -6659,7 +12383,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         except Exception as e:
+
+
+
+
 
 
 
@@ -6667,7 +12399,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"[MAJ] ❌ {error_msg}")
+
+
+
+
 
 
 
@@ -6675,7 +12415,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 QMessageBox.critical(self, "Erreur de permissions", 
+
+
+
+
 
 
 
@@ -6683,7 +12431,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             else:
+
+
+
+
 
 
 
@@ -6691,7 +12447,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         finally:
+
+
+
+
 
 
 
@@ -6699,7 +12463,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.update_btn.setEnabled(True)
+
+
+
+
 
 
 
@@ -6711,7 +12483,19 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
     def debug_github(self):
+
+
+
+
 
 
 
@@ -6719,7 +12503,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         self.log_widget.append("=" * 70)
+
+
+
+
 
 
 
@@ -6727,11 +12519,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         self.log_widget.append("=" * 70)
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -6739,7 +12543,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             import time
+
+
+
+
 
 
 
@@ -6747,7 +12559,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6755,7 +12575,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append("📡 TEST 1: Connexion de base")
+
+
+
+
 
 
 
@@ -6763,7 +12591,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
+
+
+
+
 
 
 
@@ -6771,7 +12607,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 'Expires': '0',
+
+
+
+
 
 
 
@@ -6779,11 +12623,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             }
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6791,11 +12647,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"📋 Headers: {headers}")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6803,7 +12671,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             r = requests.get(UPDATE_CHECK_URL, timeout=15, headers=headers)
+
+
+
+
 
 
 
@@ -6811,7 +12687,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6819,7 +12703,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"📊 Statut HTTP: {r.status_code}")
+
+
+
+
 
 
 
@@ -6827,7 +12719,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6835,7 +12735,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 content = r.text.strip()
+
+
+
+
 
 
 
@@ -6843,11 +12751,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 self.log_widget.append(f"📄 Contenu nettoyé: '{content.replace(chr(65279), '').replace('\\r', '').replace('\\n', '')}'")
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -6855,7 +12775,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 try:
+
+
+
+
 
 
 
@@ -6863,11 +12791,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"✅ Version parsée: {version_tuple}")
 
 
 
+
+
+
+
                     
+
+
+
+
 
 
 
@@ -6875,7 +12815,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     local_tuple = parse_version(VERSION)
+
+
+
+
 
 
 
@@ -6883,7 +12831,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     
+
+
+
+
 
 
 
@@ -6891,11 +12847,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         self.log_widget.append("✅ Application à jour")
 
 
 
+
+
+
+
                     else:
+
+
+
+
 
 
 
@@ -6903,11 +12871,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         
 
 
 
+
+
+
+
                 except Exception as e:
+
+
+
+
 
 
 
@@ -6915,7 +12895,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             else:
+
+
+
+
 
 
 
@@ -6923,11 +12911,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 self.log_widget.append(f"📄 Réponse: {r.text[:200]}...")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6935,11 +12935,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append("\n📡 TEST 2: URLs alternatives anti-cache")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6947,11 +12959,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             random_hash = random.randint(100000, 999999)
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -6959,7 +12983,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/"),
+
+
+
+
 
 
 
@@ -6967,7 +12999,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 f"{UPDATE_CHECK_URL}?cache_bust={timestamp}&random={random_hash}",
+
+
+
+
 
 
 
@@ -6975,7 +13015,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             ]
+
+
+
+
 
 
 
@@ -6983,7 +13031,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             for i, url in enumerate(alternative_urls):
+
+
+
+
 
 
 
@@ -6991,7 +13047,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"\n🔄 Test URL {i+1}: {url}")
+
+
+
+
 
 
 
@@ -6999,7 +13063,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     if r.status_code == 200:
+
+
+
+
 
 
 
@@ -7007,7 +13079,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         self.log_widget.append(f"✅ Succès: '{content}'")
+
+
+
+
 
 
 
@@ -7015,7 +13095,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         self.log_widget.append(f"❌ Erreur: {r.status_code}")
+
+
+
+
 
 
 
@@ -7023,7 +13111,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"❌ Exception: {e}")
+
+
+
+
 
 
 
@@ -7031,7 +13127,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         except Exception as e:
+
+
+
+
 
 
 
@@ -7039,11 +13143,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         
 
 
 
+
+
+
+
         self.log_widget.append("=" * 70)
+
+
+
+
 
 
 
@@ -7051,7 +13167,19 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         self.log_widget.append("=" * 70)
+
+
+
+
+
+
+
+
 
 
 
@@ -7063,11 +13191,27 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         """Test de version locale avec création de fichier de test"""
 
 
 
+
+
+
+
         self.log_widget.append("=" * 60)
+
+
+
+
+
+
+
+
 
 
 
@@ -7083,6 +13227,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 60)
 
 
@@ -7091,7 +13243,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -7107,7 +13275,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             # Créer un fichier de version de test local
+
+
+
+
+
+
+
+
 
 
 
@@ -7123,6 +13307,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             test_file = "version_test.txt"
 
 
@@ -7131,7 +13323,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7147,6 +13355,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.log_widget.append(f"📝 Version de test: {test_version}")
 
 
@@ -7155,7 +13371,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7171,6 +13403,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f.write(test_version)
 
 
@@ -7179,7 +13419,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7195,7 +13451,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7211,7 +13483,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.log_widget.append("\n📖 Test de lecture du fichier local:")
+
+
+
+
+
+
+
+
 
 
 
@@ -7227,6 +13515,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 content = f.read().strip()
 
 
@@ -7235,7 +13531,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7251,7 +13563,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7267,7 +13595,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             try:
+
+
+
+
+
+
+
+
 
 
 
@@ -7283,6 +13627,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 self.log_widget.append(f"✅ Version parsée: {version_tuple}")
 
 
@@ -7291,7 +13643,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -7307,7 +13675,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 local_tuple = parse_version(VERSION)
+
+
+
+
+
+
+
+
 
 
 
@@ -7323,6 +13707,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 self.log_widget.append(f"📊 Version test: {test_version} -> {version_tuple}")
 
 
@@ -7331,7 +13723,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -7347,7 +13755,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     self.log_widget.append("✅ Application à jour (vs fichier test)")
+
+
+
+
+
+
+
+
 
 
 
@@ -7363,9 +13787,20 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     self.log_widget.append("⬇️ Mise à jour disponible (vs fichier test)")
+
                     
+
                     # Forcer l'installation de la mise à jour
+
                     self.force_update_installation(test_version)
 
 
@@ -7374,6 +13809,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     
 
 
@@ -7382,7 +13825,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -7398,7 +13857,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7414,7 +13889,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             try:
+
+
+
+
+
+
+
+
 
 
 
@@ -7430,7 +13921,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 self.log_widget.append(f"\n🗑️ Fichier de test supprimé: {test_file}")
+
+
+
+
+
+
+
+
 
 
 
@@ -7446,7 +13953,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 self.log_widget.append(f"\n⚠️ Impossible de supprimer {test_file}: {e}")
+
+
+
+
+
+
+
+
 
 
 
@@ -7462,7 +13985,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -7478,6 +14017,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         
 
 
@@ -7486,7 +14033,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 60)
+
+
+
+
+
+
+
+
 
 
 
@@ -7502,7 +14065,31 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 60)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7526,6 +14113,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         """Vérification forcée avec toutes les méthodes anti-cache"""
 
 
@@ -7534,7 +14129,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 70)
+
+
+
+
+
+
+
+
 
 
 
@@ -7550,6 +14161,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 70)
 
 
@@ -7558,7 +14177,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         
+
+
+
+
+
+
+
+
 
 
 
@@ -7574,6 +14209,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             import time
 
 
@@ -7582,7 +14225,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7598,7 +14257,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.force_check_btn.setEnabled(False)
+
+
+
+
+
+
+
+
 
 
 
@@ -7614,7 +14289,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7630,7 +14321,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             urls_to_try = [
+
+
+
+
+
+
+
+
 
 
 
@@ -7646,7 +14353,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f"{UPDATE_CHECK_URL}?t={int(time.time())}",
+
+
+
+
+
+
+
+
 
 
 
@@ -7662,7 +14385,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f"{UPDATE_CHECK_URL}?hash={abs(hash(str(time.time())))}&force=1",
+
+
+
+
+
+
+
+
 
 
 
@@ -7678,7 +14417,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "github.com").replace("/main/", "/blob/main/")
+
+
+
+
+
+
+
+
 
 
 
@@ -7694,7 +14449,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7710,7 +14481,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+
+
+
+
+
+
+
+
 
 
 
@@ -7726,7 +14513,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 'Expires': '0',
+
+
+
+
+
+
+
+
 
 
 
@@ -7742,7 +14545,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 'Accept': 'text/plain, */*',
+
+
+
+
+
+
+
+
 
 
 
@@ -7758,7 +14577,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 'Connection': 'close'
+
+
+
+
+
+
+
+
 
 
 
@@ -7774,7 +14609,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7790,7 +14641,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.log_widget.append(f"📋 Headers anti-cache: {headers}")
+
+
+
+
+
+
+
+
 
 
 
@@ -7806,7 +14673,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7822,7 +14705,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -7838,7 +14737,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 try:
+
+
+
+
+
+
+
+
 
 
 
@@ -7854,6 +14769,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     self.log_widget.append(f"🌐 URL: {url}")
 
 
@@ -7862,7 +14785,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     
+
+
+
+
+
+
+
+
 
 
 
@@ -7878,7 +14817,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     r = requests.get(url, timeout=10, headers=headers)
+
+
+
+
+
+
+
+
 
 
 
@@ -7894,7 +14849,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     
+
+
+
+
+
+
+
+
 
 
 
@@ -7910,6 +14881,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     self.log_widget.append(f"⏱️ Temps: {response_time:.2f}s | Statut: {r.status_code}")
 
 
@@ -7918,7 +14897,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     
+
+
+
+
+
+
+
+
 
 
 
@@ -7934,7 +14929,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         content = r.text.strip()
+
+
+
+
+
+
+
+
 
 
 
@@ -7950,7 +14961,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                             clean_content = content.replace('\ufeff', '').replace('\r', '').replace('\n', '')
+
+
+
+
+
+
+
+
 
 
 
@@ -7966,7 +14993,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                             self.log_widget.append(f"✅ Succès: '{clean_content}'")
+
+
+
+
+
+
+
+
 
 
 
@@ -7982,6 +15025,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                             self.log_widget.append("⚠️ Réponse vide")
 
 
@@ -7990,7 +15041,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     else:
+
+
+
+
+
+
+
+
 
 
 
@@ -8006,6 +15073,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         
 
 
@@ -8014,7 +15089,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -8030,7 +15121,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -8046,7 +15153,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 time.sleep(0.5)  # Petite pause entre les tentatives
+
+
+
+
+
+
+
+
 
 
 
@@ -8062,7 +15185,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             # Analyse des résultats
+
+
+
+
+
+
+
+
 
 
 
@@ -8078,7 +15217,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 self.log_widget.append("📊 ANALYSE DES RÉSULTATS:")
+
+
+
+
+
+
+
+
 
 
 
@@ -8094,7 +15249,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -8110,7 +15281,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 version_groups = {}
+
+
+
+
+
+
+
+
 
 
 
@@ -8126,7 +15313,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     if version not in version_groups:
+
+
+
+
+
+
+
+
 
 
 
@@ -8142,6 +15345,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     version_groups[version].append((url, time_taken))
 
 
@@ -8150,7 +15361,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -8166,7 +15393,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     self.log_widget.append(f"📄 Version '{version}' trouvée {len(results)} fois:")
+
+
+
+
+
+
+
+
 
 
 
@@ -8182,6 +15425,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         self.log_widget.append(f"  🌐 {url} ({time_taken:.2f}s)")
 
 
@@ -8190,7 +15441,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -8206,7 +15473,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 most_common_version = max(version_groups.keys(), key=lambda v: len(version_groups[v]))
+
+
+
+
+
+
+
+
 
 
 
@@ -8222,7 +15505,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -8238,7 +15537,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 try:
+
+
+
+
+
+
+
+
 
 
 
@@ -8254,6 +15569,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     remote_tuple = parse_version(most_common_version)
 
 
@@ -8262,7 +15585,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     
+
+
+
+
+
+
+
+
 
 
 
@@ -8278,7 +15617,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     self.log_widget.append(f"📊 Version GitHub: {most_common_version} -> {remote_tuple}")
+
+
+
+
+
+
+
+
 
 
 
@@ -8294,7 +15649,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     if local_tuple >= remote_tuple:
+
+
+
+
+
+
+
+
 
 
 
@@ -8310,7 +15681,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         self.update_label.setText(f"✅ Application à jour ({VERSION})")
+
+
+
+
+
+
+
+
 
 
 
@@ -8326,6 +15713,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     else:
 
 
@@ -8334,10 +15729,29 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         self.log_widget.append("⬇️ Mise à jour disponible")
+
                         
+
                         # Forcer l'installation de la mise à jour
+
                         self.force_update_installation(most_common_version)
+
+
+
+
+
+
+
+
 
 
 
@@ -8353,7 +15767,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         self.update_btn.setEnabled(True)
+
+
+
+
+
+
+
+
 
 
 
@@ -8369,7 +15799,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -8385,7 +15831,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             else:
+
+
+
+
+
+
+
+
 
 
 
@@ -8401,7 +15863,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
+
+
+
+
+
+
+
+
 
 
 
@@ -8417,7 +15895,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -8433,7 +15927,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.log_widget.append(f"❌ Erreur générale: {e}")
+
+
+
+
+
+
+
+
 
 
 
@@ -8449,7 +15959,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             # Réactiver le bouton
+
+
+
+
+
+
+
+
 
 
 
@@ -8465,7 +15991,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.force_check_btn.setText("⚡ Force Check")
+
+
+
+
+
+
+
+
 
 
 
@@ -8481,7 +16023,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 70)
+
+
+
+
+
+
+
+
 
 
 
@@ -8497,7 +16055,31 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 70)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8521,6 +16103,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         """Vérification ultra-rapide avec toutes les méthodes anti-cache"""
 
 
@@ -8529,7 +16119,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 80)
+
+
+
+
+
+
+
+
 
 
 
@@ -8545,7 +16151,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         self.log_widget.append("=" * 80)
+
+
+
+
+
+
+
+
 
 
 
@@ -8561,6 +16183,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
         try:
 
 
@@ -8569,7 +16199,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             import time
+
+
+
+
+
+
+
+
 
 
 
@@ -8585,7 +16231,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -8601,7 +16263,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.ultra_check_btn.setEnabled(False)
+
+
+
+
+
+
+
+
 
 
 
@@ -8617,7 +16295,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -8633,7 +16327,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             self.log_widget.append(f"🌐 URL GitHub: {UPDATE_CHECK_URL}")
+
+
+
+
+
+
+
+
 
 
 
@@ -8649,7 +16359,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -8665,7 +16391,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             timestamp = int(time.time())
+
+
+
+
+
+
+
+
 
 
 
@@ -8681,7 +16423,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             urls_to_try = [
+
+
+
+
+
+
+
+
 
 
 
@@ -8697,7 +16455,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f"{UPDATE_CHECK_URL}?t={timestamp}",
+
+
+
+
+
+
+
+
 
 
 
@@ -8713,7 +16487,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f"{UPDATE_CHECK_URL}?timestamp={timestamp}&force=1",
+
+
+
+
+
+
+
+
 
 
 
@@ -8729,7 +16519,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f"{UPDATE_CHECK_URL}?cache_bust={timestamp}&random={random_hash}",
+
+
+
+
+
+
+
+
 
 
 
@@ -8745,7 +16551,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f"{UPDATE_CHECK_URL}?bypass_cache=1&v={timestamp}",
+
+
+
+
+
+
+
+
 
 
 
@@ -8761,7 +16583,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 f"{UPDATE_CHECK_URL}?ms={int(time.time() * 1000)}",
+
+
+
+
+
+
+
+
 
 
 
@@ -8777,6 +16615,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             ]
 
 
@@ -8785,7 +16631,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -8801,7 +16663,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 {
+
+
+
+
+
+
+
+
 
 
 
@@ -8817,7 +16695,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     'Pragma': 'no-cache',
+
+
+
+
+
+
+
+
 
 
 
@@ -8833,7 +16727,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     'User-Agent': f'VMT-Path-Renamer-Ultra/{VERSION}',
+
+
+
+
+
+
+
+
 
 
 
@@ -8849,7 +16759,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     'Connection': 'close'
+
+
+
+
+
+
+
+
 
 
 
@@ -8865,7 +16791,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 {
+
+
+
+
+
+
+
+
 
 
 
@@ -8881,7 +16823,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     'Pragma': 'no-cache',
+
+
+
+
+
+
+
+
 
 
 
@@ -8897,7 +16855,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     'Accept': '*/*',
+
+
+
+
+
+
+
+
 
 
 
@@ -8913,7 +16887,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 },
+
+
+
+
+
+
+
+
 
 
 
@@ -8929,7 +16919,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     'Cache-Control': 'no-store',
+
+
+
+
+
+
+
+
 
 
 
@@ -8945,7 +16951,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     'Accept': 'text/plain',
+
+
+
+
+
+
+
+
 
 
 
@@ -8961,7 +16983,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 }
+
+
+
+
+
+
+
+
 
 
 
@@ -8977,7 +17015,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -8993,7 +17047,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -9009,7 +17079,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -9025,7 +17111,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 for j, headers in enumerate(headers_variants):
+
+
+
+
+
+
+
+
 
 
 
@@ -9041,7 +17143,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         start_time = time.time()
+
+
+
+
+
+
+
+
 
 
 
@@ -9057,7 +17175,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         end_time = time.time()
+
+
+
+
+
+
+
+
 
 
 
@@ -9073,7 +17207,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                         
+
+
+
+
+
+
+
+
 
 
 
@@ -9089,7 +17239,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                             content = r.text.strip()
+
+
+
+
+
+
+
+
 
 
 
@@ -9105,7 +17271,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                                 clean_content = content.replace('\ufeff', '').replace('\r', '').replace('\n', '')
+
+
+
+
+
+
+
+
 
 
 
@@ -9121,7 +17303,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                                 self.log_widget.append(f"✅ {i+1}.{j+1}: '{clean_content}' ({response_time:.2f}s)")
+
+
+
+
+
+
+
+
 
 
 
@@ -9137,7 +17335,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                                 # Arrêter si on a assez de résultats cohérents
+
+
+
+
+
+
+
+
 
 
 
@@ -9153,7 +17367,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                                     break
+
+
+
+
+
+
+
+
 
 
 
@@ -9169,7 +17399,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                                 self.log_widget.append(f"⚠️ {i+1}.{j+1}: Réponse vide")
+
+
+
+
+
+
+
+
 
 
 
@@ -9185,7 +17431,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                             self.log_widget.append(f"❌ {i+1}.{j+1}: HTTP {r.status_code}")
+
+
+
+
+
+
+
+
 
 
 
@@ -9201,7 +17463,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     except Exception as e:
+
+
+
+
+
+
+
+
 
 
 
@@ -9217,7 +17495,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -9233,7 +17527,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     break
+
+
+
+
+
+
+
+
 
 
 
@@ -9249,7 +17559,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             
+
+
+
+
+
+
+
+
 
 
 
@@ -9265,7 +17591,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
             if successful_results:
+
+
+
+
+
+
+
+
 
 
 
@@ -9281,6 +17623,14 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 self.log_widget.append("=" * 60)
 
 
@@ -9289,7 +17639,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 
+
+
+
+
+
+
+
+
 
 
 
@@ -9305,7 +17671,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                 version_groups = {}
+
+
+
+
+
+
+
+
 
 
 
@@ -9321,7 +17703,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     if version not in version_groups:
+
+
+
+
+
+
+
+
 
 
 
@@ -9337,11 +17735,27 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
+
+
+
+
                     version_groups[version].append((url, time_taken))
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -9349,7 +17763,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"📄 Version '{version}': {len(results)} fois")
+
+
+
+
 
 
 
@@ -9357,11 +17779,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         self.log_widget.append(f"  🌐 {url} ({time_taken:.2f}s)")
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -9369,7 +17803,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 most_common_version = max(version_groups.keys(), key=lambda v: len(version_groups[v]))
+
+
+
+
 
 
 
@@ -9377,7 +17819,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -9385,11 +17835,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 self.log_widget.append(f"📊 Trouvée {most_common_count} fois sur {len(successful_results)} tentatives")
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -9397,7 +17859,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 try:
+
+
+
+
 
 
 
@@ -9405,11 +17875,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     remote_tuple = parse_version(most_common_version)
 
 
 
+
+
+
+
                     
+
+
+
+
 
 
 
@@ -9417,7 +17899,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"📊 Version GitHub: {most_common_version} -> {remote_tuple}")
+
+
+
+
 
 
 
@@ -9425,7 +17915,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     if local_tuple >= remote_tuple:
+
+
+
+
 
 
 
@@ -9433,7 +17931,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         self.update_label.setText(f"✅ Application à jour ({VERSION})")
+
+
+
+
 
 
 
@@ -9441,14 +17947,29 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     else:
 
 
 
+
+
+
+
                         self.log_widget.append("⬇️ MISE À JOUR DISPONIBLE (ultra-confirmé)")
+
                         
+
                         # Forcer l'installation de la mise à jour
+
                         self.force_update_installation(most_common_version)
+
+
+
+
 
 
 
@@ -9456,7 +17977,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         self.update_btn.setEnabled(True)
+
+
+
+
 
 
 
@@ -9464,7 +17993,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 except Exception as e:
+
+
+
+
 
 
 
@@ -9472,7 +18009,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             else:
+
+
+
+
 
 
 
@@ -9480,7 +18025,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
+
+
+
+
 
 
 
@@ -9488,7 +18041,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -9496,7 +18057,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"❌ Erreur générale: {e}")
+
+
+
+
 
 
 
@@ -9504,7 +18073,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             # Réactiver le bouton
+
+
+
+
 
 
 
@@ -9512,7 +18089,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.ultra_check_btn.setText("🚀 Ultra Check")
+
+
+
+
 
 
 
@@ -9520,7 +18105,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         self.log_widget.append("=" * 80)
+
+
+
+
 
 
 
@@ -9528,7 +18121,19 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         self.log_widget.append("=" * 80)
+
+
+
+
+
+
+
+
 
 
 
@@ -9540,11 +18145,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         """Test de connexion simple et rapide"""
 
 
 
+
+
+
+
         self.log_widget.append("=" * 50)
+
+
+
+
 
 
 
@@ -9552,11 +18169,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         self.log_widget.append("=" * 50)
 
 
 
+
+
+
+
         
+
+
+
+
 
 
 
@@ -9564,11 +18193,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             import time
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -9576,11 +18217,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"🌐 Test de connexion à: {UPDATE_CHECK_URL}")
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -9588,7 +18241,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             r = requests.get(UPDATE_CHECK_URL, timeout=10)
+
+
+
+
 
 
 
@@ -9596,7 +18257,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -9604,7 +18273,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -9612,7 +18289,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             self.log_widget.append(f"📊 Statut HTTP: {r.status_code}")
+
+
+
+
 
 
 
@@ -9620,7 +18305,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
             
+
+
+
+
 
 
 
@@ -9628,7 +18321,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 content = r.text.strip()
+
+
+
+
 
 
 
@@ -9636,7 +18337,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 
+
+
+
+
 
 
 
@@ -9644,7 +18353,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 try:
+
+
+
+
 
 
 
@@ -9652,7 +18369,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"✅ Version parsée: {version_tuple}")
+
+
+
+
 
 
 
@@ -9660,7 +18385,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     # Comparaison rapide
+
+
+
+
 
 
 
@@ -9668,7 +18401,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     if local_tuple >= version_tuple:
+
+
+
+
 
 
 
@@ -9676,7 +18417,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     else:
+
+
+
+
 
 
 
@@ -9684,7 +18433,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                         
+
+
+
+
 
 
 
@@ -9692,7 +18449,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                     self.log_widget.append(f"❌ Erreur parsing: {e}")
+
+
+
+
 
 
 
@@ -9700,7 +18465,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
                 self.log_widget.append(f"❌ Erreur HTTP: {r.status_code}")
+
+
+
+
 
 
 
@@ -9708,7 +18481,15 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         except Exception as e:
+
+
+
+
 
 
 
@@ -9716,11 +18497,23 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         
 
 
 
+
+
+
+
         self.log_widget.append("=" * 50)
+
+
+
+
 
 
 
@@ -9728,7 +18521,19 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
         self.log_widget.append("=" * 50)
+
+
+
+
+
+
+
+
 
 
 
@@ -9740,38 +18545,77 @@ Cliquez sur "Installer" pour continuer.
 
 
 
+
+
+
+
 if __name__ == "__main__":
+
+
 
     try:
 
+
+
         # Authentification obligatoire au démarrage
+
+
 
         if require_authentication():
 
+
+
             # L'application QApplication est déjà créée dans require_authentication()
+
+
 
             app = QApplication.instance()
 
+
+
             if app is None:
+
+
 
                 app = QApplication(sys.argv)
 
+
+
             
+
+
 
             window = VMTPathRenamer()
 
+
+
             window.show()
+
+
 
             sys.exit(app.exec_())
 
+
+
         else:
+
+
 
             sys.exit(0)
 
+
+
     except Exception as e:
+
+
 
         log_crash(str(e))
 
+
+
         print(f"Erreur au lancement : {e}")
 
+
+
         input("Appuyez sur Entrée pour quitter...")
+
