@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 # ------------------ VERSION ------------------
-VERSION = "0.1"  # Version locale de départ
+VERSION = "0.2"  # Version locale actuelle
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 
@@ -376,40 +376,28 @@ class VMTPathRenamer(QWidget):
                     self.update_btn.setEnabled(False)
             else:
                 self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
+                self.update_btn.setEnabled(False)
         except Exception:
             self.update_label.setText("⚠️ Erreur vérification mise à jour")
             self.update_btn.setEnabled(False)
 
     def download_update(self):
         try:
-            # Télécharge le nouveau script
-            r_code = requests.get(UPDATE_SCRIPT_URL, timeout=10)
-            if r_code.status_code != 200:
+            r = requests.get(UPDATE_SCRIPT_URL, timeout=10)
+            if r.status_code != 200:
                 QMessageBox.warning(self, "Erreur", "Impossible de télécharger la nouvelle version.")
                 return
 
-            # Récupère la version officielle
-            r_ver = requests.get(UPDATE_CHECK_URL, timeout=5)
-            latest_version = r_ver.text.strip() if r_ver.status_code == 200 else VERSION
-
             script_path = os.path.abspath(sys.argv[0])
-
-            new_code = r_code.text
-
-            # Remplace la ligne VERSION par la nouvelle version
-            new_code = re.sub(r'VERSION\s*=\s*".*"', f'VERSION = "{latest_version}"', new_code)
-
-            # Écrit le nouveau code
             with open(script_path, "w", encoding="utf-8") as f:
-                f.write(new_code)
+                f.write(r.text)
 
             QMessageBox.information(
                 self,
                 "Mise à jour",
-                f"Nouvelle version {latest_version} installée avec succès !\nL'application va redémarrer."
+                "Nouvelle version installée avec succès !\nL'application va redémarrer."
             )
 
-            # Redémarrage automatique
             python = sys.executable
             os.execl(python, python, *sys.argv)
 
@@ -423,4 +411,3 @@ if __name__ == "__main__":
     window = VMTPathRenamer()
     window.show()
     sys.exit(app.exec_())
-
