@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 
 # ------------------ VERSION ------------------
 
-VERSION = "10.0.0"  # version locale
+VERSION = "11.0.0"  # version locale
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 
@@ -33,7 +33,10 @@ UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 def parse_version(v):
     try:
         v_clean = (v or "").strip().replace('\ufeff', '').replace('\r', '').replace('\n', '')
-        return tuple(int(x) for x in v_clean.split("."))
+        if not v_clean or not v_clean.replace('.', '').isdigit():
+            return (0,)
+        parts = v_clean.split(".")
+        return tuple(int(x) for x in parts if x.isdigit())
     except Exception:
         return (0,)
 
@@ -123,7 +126,7 @@ def check_update():
                 try:
                     print(f"[DEBUG] Tentative {i+1}.{j+1}: {url}")
                     
-                    r = requests.get(url, timeout=8, headers=headers)
+                    r = requests.get(url, timeout=10, headers=headers)
                     print(f"[DEBUG] Statut HTTP: {r.status_code}")
                     
                     if r.status_code == 200:
@@ -1045,7 +1048,7 @@ class VMTPathRenamer(QWidget):
                 UPDATE_CHECK_URL,
                 f"{UPDATE_CHECK_URL}?t={int(time.time())}",
                 f"{UPDATE_CHECK_URL}?v={int(time.time())}&nocache=1",
-                f"{UPDATE_CHECK_URL}?hash={hash(time.time())}&force=1",
+                f"{UPDATE_CHECK_URL}?hash={abs(hash(str(time.time())))}&force=1",
                 f"{UPDATE_CHECK_URL}?timestamp={int(time.time() * 1000)}",
                 UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "github.com").replace("/main/", "/blob/main/")
             ]
@@ -1072,7 +1075,7 @@ class VMTPathRenamer(QWidget):
                     self.log_widget.append(f"🌐 URL: {url}")
                     
                     start_time = time.time()
-                    r = requests.get(url, timeout=8, headers=headers)
+                    r = requests.get(url, timeout=10, headers=headers)
                     end_time = time.time()
                     
                     response_time = end_time - start_time
@@ -1218,7 +1221,7 @@ class VMTPathRenamer(QWidget):
                 for j, headers in enumerate(headers_variants):
                     try:
                         start_time = time.time()
-                        r = requests.get(url, timeout=5, headers=headers)
+                        r = requests.get(url, timeout=8, headers=headers)
                         end_time = time.time()
                         response_time = end_time - start_time
                         
@@ -1316,7 +1319,7 @@ class VMTPathRenamer(QWidget):
             self.log_widget.append(f"🌐 Test de connexion à: {UPDATE_CHECK_URL}")
             
             start_time = time.time()
-            r = requests.get(UPDATE_CHECK_URL, timeout=5)
+            r = requests.get(UPDATE_CHECK_URL, timeout=10)
             end_time = time.time()
             
             response_time = end_time - start_time
