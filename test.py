@@ -6,6 +6,8 @@ import shutil
 
 import sys
 
+import time
+
 import requests
 
 from PyQt5.QtWidgets import (
@@ -16,13 +18,13 @@ from PyQt5.QtWidgets import (
 
 )
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 
 
 # ------------------ VERSION ------------------
 
-VERSION = "13.0.0"  # version locale
+VERSION = "12.0.0"  # version locale
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 
@@ -63,14 +65,15 @@ def log_crash(error_text):
 
 
 
-def check_update():
+def check_update(silent=False):
     """Vérifie la version sur GitHub avec contournement ultra-robuste du cache"""
     try:
         import time
         import random
-        print(f"[DEBUG] Vérification de la mise à jour...")
-        print(f"[DEBUG] URL: {UPDATE_CHECK_URL}")
-        print(f"[DEBUG] Version locale: {VERSION}")
+        if not silent:
+            print(f"[DEBUG] Vérification de la mise à jour...")
+            print(f"[DEBUG] URL: {UPDATE_CHECK_URL}")
+            print(f"[DEBUG] Version locale: {VERSION}")
         
         # Méthodes ultra-multiples pour contourner le cache GitHub
         timestamp = int(time.time())
@@ -124,13 +127,14 @@ def check_update():
         highest_version_url = None
         local_version_tuple = parse_version(VERSION)
         
-        print(f"[DEBUG] Version locale tuple: {local_version_tuple}")
-        
-        print(f"[DEBUG] Test prioritaire des CDN (éviter GitHub)...")
+        if not silent:
+            print(f"[DEBUG] Version locale tuple: {local_version_tuple}")
+            print(f"[DEBUG] Test prioritaire des CDN (éviter GitHub)...")
         
         for i, url in enumerate(urls_to_try):
             try:
-                print(f"[DEBUG] Test CDN {i+1}: {url[:80]}...")
+                if not silent:
+                    print(f"[DEBUG] Test CDN {i+1}: {url[:80]}...")
                 
                 # Headers simples pour CDN
                 headers = {
@@ -145,42 +149,51 @@ def check_update():
                     latest_version_raw = r.text.strip()
                     # Nettoyer la version (enlever BOM, espaces, retours à la ligne)
                     latest_version_clean = latest_version_raw.replace('\ufeff', '').replace('\r', '').replace('\n', '').strip()
-                    print(f"[DEBUG] Version trouvée: '{latest_version_clean}' depuis CDN")
+                    if not silent:
+                        print(f"[DEBUG] Version trouvée: '{latest_version_clean}' depuis CDN")
                     
                     version_tuple = parse_version(latest_version_clean)
                     if version_tuple > highest_version_tuple:
                         highest_version = latest_version_clean
                         highest_version_tuple = version_tuple
                         highest_version_url = url
-                        print(f"[DEBUG] Nouvelle version la plus haute: {highest_version}")
+                        if not silent:
+                            print(f"[DEBUG] Nouvelle version la plus haute: {highest_version}")
                         
                         # Arrêter dès qu'on trouve une version plus récente que la locale
                         if version_tuple > local_version_tuple:
-                            print(f"[DEBUG] Version plus récente trouvée depuis CDN, arrêt")
+                            if not silent:
+                                print(f"[DEBUG] Version plus récente trouvée depuis CDN, arrêt")
                             break
                 else:
-                    print(f"[DEBUG] CDN {i+1} - Erreur HTTP {r.status_code}")
+                    if not silent:
+                        print(f"[DEBUG] CDN {i+1} - Erreur HTTP {r.status_code}")
                     
             except requests.exceptions.Timeout:
-                print(f"[DEBUG] CDN {i+1} - Timeout")
+                if not silent:
+                    print(f"[DEBUG] CDN {i+1} - Timeout")
                 continue
             except requests.exceptions.ConnectionError:
-                print(f"[DEBUG] CDN {i+1} - Erreur de connexion")
+                if not silent:
+                    print(f"[DEBUG] CDN {i+1} - Erreur de connexion")
                 continue
             except Exception as e:
-                print(f"[DEBUG] CDN {i+1} - Erreur: {e}")
+                if not silent:
+                    print(f"[DEBUG] CDN {i+1} - Erreur: {e}")
                 continue
                 
             # Petite pause entre les URLs pour éviter le rate limiting
             time.sleep(0.1)
         
         if not highest_version:
-            print("[INFO] Aucune version récupérée depuis les CDN")
+            if not silent:
+                print("[INFO] Aucune version récupérée depuis les CDN")
             return "Erreur", False, "Impossible d'accéder aux serveurs de mise à jour"
         
         # Utiliser la version la plus haute trouvée
         if highest_version:
-            print(f"[DEBUG] Version finale (la plus haute): '{highest_version}' depuis {highest_version_url}")
+            if not silent:
+                print(f"[DEBUG] Version finale (la plus haute): '{highest_version}' depuis {highest_version_url}")
             
             # Sauvegarder l'URL de la version la plus haute pour le téléchargement
             if highest_version_url:
@@ -192,10 +205,12 @@ def check_update():
                     BEST_UPDATE_URL = highest_version_url.replace("version.txt", "test.py")
                 else:
                     BEST_UPDATE_URL = UPDATE_SCRIPT_URL
-                print(f"[DEBUG] URL de téléchargement: {BEST_UPDATE_URL}")
+                if not silent:
+                    print(f"[DEBUG] URL de téléchargement: {BEST_UPDATE_URL}")
             
             up_to_date = local_version_tuple >= highest_version_tuple
-            print(f"[DEBUG] À jour: {up_to_date}")
+            if not silent:
+                print(f"[DEBUG] À jour: {up_to_date}")
             
             return highest_version, up_to_date, f"Version la plus haute trouvée: {highest_version}"
         else:
@@ -219,129 +234,254 @@ def check_update():
 
 
 
+
+
 # ------------------ Fonctions de conversion VTF ------------------
 
+
+
 def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
+
     """Convertit un fichier VTF en TGA en utilisant VTFEdit en arrière-plan"""
+
     try:
+
         import subprocess
+
         import time
+
         
+
         # Chercher VTFEdit.exe dans différents emplacements
+
         vtfedit_paths = [
+
             "VTFEdit.exe",
+
             "vtfedit.exe",
+
             os.path.join(os.path.dirname(__file__), "VTFEdit.exe"),
+
             os.path.join(os.path.dirname(__file__), "tools", "VTFEdit.exe"),
+
             r"C:\Program Files (x86)\Nem's Tools\VTFEdit\VTFEdit.exe",
+
             r"C:\Program Files\Nem's Tools\VTFEdit\VTFEdit.exe",
+
             r"C:\VTFEdit\VTFEdit.exe"
+
         ]
+
         
+
         vtfedit_path = None
+
         for path in vtfedit_paths:
+
             if os.path.exists(path):
+
                 vtfedit_path = path
+
                 break
+
         
+
         if not vtfedit_path:
+
             return False, "VTFEdit.exe non trouvé. Installez VTFEdit ou placez-le dans le dossier."
+
         
+
         # Créer le dossier de sortie si nécessaire
+
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
         
+
         # Commande VTFEdit pour conversion automatique en arrière-plan
+
         # VTFEdit supporte les arguments en ligne de commande pour l'export
+
         cmd = [
+
             vtfedit_path,
+
             "-file", vtf_path,
+
             "-output", output_path,
+
             "-format", "tga",
+
             "-silent"  # Mode silencieux sans interface
+
         ]
+
         
+
         # Essayer aussi avec des paramètres alternatifs si la première commande échoue
+
         alternative_cmds = [
+
             [vtfedit_path, vtf_path, "-export", output_path],
+
             [vtfedit_path, "-convert", vtf_path, output_path, "-format:tga"],
+
             [vtfedit_path, "/file:" + vtf_path, "/output:" + output_path, "/format:tga"]
+
         ]
+
         
+
         # Essayer la commande principale
+
         try:
+
             result = subprocess.run(
+
                 cmd, 
+
                 capture_output=True, 
+
                 text=True, 
+
                 timeout=30,
+
                 creationflags=subprocess.CREATE_NO_WINDOW  # Pas de fenêtre
+
             )
+
             
+
             if result.returncode == 0 and os.path.exists(output_path):
+
                 return True, f"Converti avec VTFEdit: {os.path.basename(vtf_path)}"
+
                 
+
         except Exception:
+
             pass
+
         
+
         # Essayer les commandes alternatives
+
         for alt_cmd in alternative_cmds:
+
             try:
+
                 result = subprocess.run(
+
                     alt_cmd, 
+
                     capture_output=True, 
+
                     text=True, 
+
                     timeout=30,
+
                     creationflags=subprocess.CREATE_NO_WINDOW
+
                 )
+
                 
+
                 # Attendre un peu que le fichier soit créé
+
                 time.sleep(0.5)
+
                 
+
                 if os.path.exists(output_path):
+
                     return True, f"Converti avec VTFEdit (alt): {os.path.basename(vtf_path)}"
+
                     
+
             except Exception:
+
                 continue
+
         
+
         # Si aucune méthode n'a fonctionné, essayer d'ouvrir VTFEdit et utiliser l'automation Windows
+
         return convert_vtf_with_automation(vtf_path, output_path, vtfedit_path)
+
         
+
     except Exception as e:
+
         return False, f"Erreur VTFEdit: {e}"
 
+
+
 def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
+
     """Conversion VTF avec automation Windows (dernier recours)"""
+
     try:
+
         import subprocess
+
         import time
+
         
+
         # Lancer VTFEdit en arrière-plan
+
         process = subprocess.Popen([vtfedit_path], creationflags=subprocess.CREATE_NO_WINDOW)
+
         time.sleep(2)  # Attendre que VTFEdit se lance
+
         
+
         try:
+
             # Utiliser pyautogui ou win32gui pour automatiser (si disponible)
+
             import pyautogui
+
             
+
             # Ouvrir le fichier (Ctrl+O)
+
             pyautogui.hotkey('ctrl', 'o')
+
             time.sleep(1)
+
             
+
             # Taper le chemin du fichier
+
             pyautogui.write(vtf_path)
+
             pyautogui.press('enter')
+
             time.sleep(2)
+
             
+
             # Exporter (Ctrl+E ou File > Export)
+
             pyautogui.hotkey('ctrl', 'e')
+
             time.sleep(1)
+
             
+
             # Taper le chemin de sortie
+
             pyautogui.write(output_path)
+
             pyautogui.press('enter')
+
             time.sleep(2)
+
             
+
             # Fermer VTFEdit
+
             pyautogui.hotkey('alt', 'f4')
             
             if os.path.exists(output_path):
@@ -552,9 +692,20 @@ class VMTPathRenamer(QWidget):
 
         self.init_ui()
 
-        self.auto_check_update()
-
-
+        self.manual_check_update()
+        
+        # Timer pour vérification automatique toutes les 15 minutes
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.silent_check_update)
+        self.update_timer.start(15 * 60 * 1000)  # 15 minutes en millisecondes
+        
+        # Timer pour affichage du countdown (toutes les secondes)
+        self.countdown_timer = QTimer()
+        self.countdown_timer.timeout.connect(self.update_countdown_display)
+        self.countdown_timer.start(1000)  # 1 seconde
+        
+        # Variables pour le countdown
+        self.next_check_time = time.time() + (15 * 60)  # 15 minutes à partir de maintenant
 
     def init_ui(self):
 
@@ -748,20 +899,19 @@ class VMTPathRenamer(QWidget):
 
 
         # Dossiers détectés
-
         layout.addWidget(QLabel("Dossiers détectés"))
-
         self.detected_dirs_widget = QTextEdit()
-
         layout.addWidget(self.detected_dirs_widget)
 
-
+        # Timer countdown en bas à gauche
+        countdown_layout = QHBoxLayout()
+        self.countdown_label = QLabel("⏱️ Prochaine vérification dans: 15:00")
+        self.countdown_label.setStyleSheet("color: #888888; font-size: 10px;")
+        countdown_layout.addWidget(self.countdown_label)
+        countdown_layout.addStretch()  # Pousse le label vers la gauche
+        layout.addLayout(countdown_layout)
 
         self.setLayout(layout)
-
-
-
-        # Style global
 
         self.setStyleSheet("""
 
@@ -1072,40 +1222,76 @@ class VMTPathRenamer(QWidget):
         self.check_update_btn.setText("🔄 Vérification...")
         
         try:
-            self.auto_check_update()
+            latest_version, up_to_date, error_msg = check_update()
+            
+            if latest_version == "Erreur":
+                self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
+                self.update_btn.setEnabled(False)
+                self.log_widget.append(f"❌ Erreur de vérification: {error_msg}")
+                # Pas de popup pour les erreurs réseau - juste les logs
+                if not ("cache" in error_msg.lower() or "timeout" in error_msg.lower() or "connexion" in error_msg.lower()):
+                    QMessageBox.warning(self, "Erreur mise à jour",
+                                        f"Impossible de vérifier la mise à jour.\n"
+                                        f"Détails: {error_msg}")
+            elif up_to_date:
+                self.update_label.setText(f"✅ Application à jour ({VERSION})")
+                self.update_btn.setEnabled(False)
+                self.log_widget.append(f"✅ Version actuelle: {VERSION} (à jour)")
+            else:
+                self.update_label.setText(f"❌ Nouvelle version disponible ({latest_version})")
+                self.update_btn.setEnabled(True)
+                self.log_widget.append(f"⬇️ Nouvelle version disponible: {latest_version}")
+                self.log_widget.append(f"📊 Version locale: {VERSION} < Version GitHub: {latest_version}")
+                QMessageBox.information(self, "Mise à jour disponible",
+                                        f"Une nouvelle version est disponible !\n\n"
+                                        f"Version actuelle: {VERSION}\n"
+                                        f"Nouvelle version: {latest_version}\n\n"
+                                        "Cliquez sur le bouton pour mettre à jour.")
         finally:
             self.check_update_btn.setEnabled(True)
             self.check_update_btn.setText("🔄 Vérifier")
 
-    def auto_check_update(self):
-        self.log_widget.append("🔄 Vérification de la mise à jour...")
-        latest_version, up_to_date, error_msg = check_update()
-        
-        if latest_version == "Erreur":
-            self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
-            self.update_btn.setEnabled(False)
-            self.log_widget.append(f"❌ Erreur de vérification: {error_msg}")
-            # Pas de popup pour les erreurs réseau - juste les logs
-            if not ("cache" in error_msg.lower() or "timeout" in error_msg.lower() or "connexion" in error_msg.lower()):
-                QMessageBox.warning(self, "Erreur mise à jour",
-                                    f"Impossible de vérifier la mise à jour.\n"
-                                    f"Détails: {error_msg}")
-        elif up_to_date:
-            self.update_label.setText(f"✅ Application à jour ({VERSION})")
-            self.update_btn.setEnabled(False)
-            self.log_widget.append(f"✅ Version actuelle: {VERSION} (à jour)")
-        else:
-            self.update_label.setText(f"❌ Nouvelle version disponible ({latest_version})")
-            self.update_btn.setEnabled(True)
-            self.log_widget.append(f"⬇️ Nouvelle version disponible: {latest_version}")
-            self.log_widget.append(f"📊 Version locale: {VERSION} < Version GitHub: {latest_version}")
-            QMessageBox.information(self, "Mise à jour disponible",
-                                    f"Une nouvelle version est disponible !\n\n"
-                                    f"Version actuelle: {VERSION}\n"
-                                    f"Nouvelle version: {latest_version}\n\n"
-                                    "Cliquez sur le bouton pour mettre à jour.")
+    def silent_check_update(self):
+        """Vérification silencieuse automatique toutes les 15 minutes"""
+        try:
+            latest_version, up_to_date, error_msg = check_update(silent=True)
+            
+            if latest_version != "Erreur" and not up_to_date:
+                # Mise à jour détectée - mettre à jour l'interface
+                self.update_label.setText(f"🔔 Nouvelle version disponible ({latest_version})")
+                self.update_btn.setEnabled(True)
+                # Ajouter une notification discrète dans les logs
+                import datetime
+                current_time = datetime.datetime.now().strftime("%H:%M")
+                self.log_widget.append(f"[{current_time}] 🔔 Mise à jour détectée automatiquement: {latest_version}")
+            elif latest_version != "Erreur" and up_to_date:
+                # Application à jour - mettre à jour le statut si nécessaire
+                if "Nouvelle version" in self.update_label.text():
+                    self.update_label.setText(f"✅ Application à jour ({VERSION})")
+                    self.update_btn.setEnabled(False)
+        except Exception:
+            # Ignorer les erreurs en mode silencieux
+            pass
+        finally:
+            # Réinitialiser le timer pour le prochain check dans 15 minutes
+            self.next_check_time = time.time() + (15 * 60)
 
-
+    def update_countdown_display(self):
+        """Met à jour l'affichage du countdown toutes les secondes"""
+        try:
+            remaining_seconds = int(self.next_check_time - time.time())
+            
+            if remaining_seconds <= 0:
+                self.countdown_label.setText("⏱️ Vérification en cours...")
+                return
+            
+            minutes = remaining_seconds // 60
+            seconds = remaining_seconds % 60
+            
+            self.countdown_label.setText(f"⏱️ Prochaine vérification dans: {minutes:02d}:{seconds:02d}")
+        except Exception:
+            # En cas d'erreur, afficher un message par défaut
+            self.countdown_label.setText("⏱️ Prochaine vérification dans: --:--")
 
     def download_update(self):
         try:
@@ -1304,395 +1490,790 @@ class VMTPathRenamer(QWidget):
     def test_local_version(self):
         """Test de version locale avec création de fichier de test"""
         self.log_widget.append("=" * 60)
+
         self.log_widget.append("🧪 TEST LOCAL - Création et test de version")
+
         self.log_widget.append("=" * 60)
+
         
+
         try:
+
             # Créer un fichier de version de test local
+
             test_version = "12.0.0"  # Version plus récente pour tester
+
             test_file = "version_test.txt"
+
             
+
             self.log_widget.append(f"📝 Création du fichier de test: {test_file}")
+
             self.log_widget.append(f"📝 Version de test: {test_version}")
+
             
+
             with open(test_file, "w", encoding="utf-8") as f:
+
                 f.write(test_version)
+
             
+
             self.log_widget.append(f"✅ Fichier créé: {test_file}")
+
             
+
             # Test de lecture du fichier local
+
             self.log_widget.append("\n📖 Test de lecture du fichier local:")
+
             with open(test_file, "r", encoding="utf-8") as f:
+
                 content = f.read().strip()
+
             
+
             self.log_widget.append(f"📄 Contenu lu: '{content}'")
+
             
+
             # Test de parsing
+
             try:
+
                 version_tuple = parse_version(content)
+
                 self.log_widget.append(f"✅ Version parsée: {version_tuple}")
+
                 
+
                 # Comparaison avec version locale
+
                 local_tuple = parse_version(VERSION)
+
                 self.log_widget.append(f"📊 Version locale: {VERSION} -> {local_tuple}")
+
                 self.log_widget.append(f"📊 Version test: {test_version} -> {version_tuple}")
+
                 
+
                 if local_tuple >= version_tuple:
+
                     self.log_widget.append("✅ Application à jour (vs fichier test)")
+
                 else:
+
                     self.log_widget.append("⬇️ Mise à jour disponible (vs fichier test)")
+
                     
+
             except Exception as e:
+
                 self.log_widget.append(f"❌ Erreur parsing: {e}")
+
             
+
             # Nettoyage
+
             try:
+
                 os.remove(test_file)
+
                 self.log_widget.append(f"\n🗑️ Fichier de test supprimé: {test_file}")
+
             except Exception as e:
+
                 self.log_widget.append(f"\n⚠️ Impossible de supprimer {test_file}: {e}")
+
                 
+
         except Exception as e:
+
             self.log_widget.append(f"❌ Erreur générale: {e}")
+
         
+
         self.log_widget.append("=" * 60)
+
         self.log_widget.append("✅ TEST LOCAL TERMINÉ")
+
         self.log_widget.append("=" * 60)
+
+
 
     def force_check_update(self):
+
         """Vérification forcée avec toutes les méthodes anti-cache"""
+
         self.log_widget.append("=" * 70)
+
         self.log_widget.append("⚡ VÉRIFICATION FORCÉE - Contournement cache GitHub")
+
         self.log_widget.append("=" * 70)
+
         
+
         try:
+
             import time
+
             
+
             # Désactiver le bouton pendant la vérification
+
             self.force_check_btn.setEnabled(False)
+
             self.force_check_btn.setText("⚡ Vérification...")
+
             
+
             # Méthodes multiples pour contourner le cache
+
             urls_to_try = [
+
                 UPDATE_CHECK_URL,
+
                 f"{UPDATE_CHECK_URL}?t={int(time.time())}",
+
                 f"{UPDATE_CHECK_URL}?v={int(time.time())}&nocache=1",
+
                 f"{UPDATE_CHECK_URL}?hash={abs(hash(str(time.time())))}&force=1",
+
                 f"{UPDATE_CHECK_URL}?timestamp={int(time.time() * 1000)}",
+
                 UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "github.com").replace("/main/", "/blob/main/")
+
             ]
+
             
+
             headers = {
+
                 'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+
                 'Pragma': 'no-cache',
+
                 'Expires': '0',
+
                 'User-Agent': f'VMT-Path-Renamer-ForceCheck/{VERSION}',
+
                 'Accept': 'text/plain, */*',
+
                 'Accept-Encoding': 'gzip, deflate',
+
                 'Connection': 'close'
+
             }
+
             
+
             self.log_widget.append(f"🎯 Version locale: {VERSION}")
+
             self.log_widget.append(f"📋 Headers anti-cache: {headers}")
+
             self.log_widget.append("")
+
             
+
             successful_results = []
+
             
+
             for i, url in enumerate(urls_to_try):
+
                 try:
+
                     self.log_widget.append(f"🔄 Tentative {i+1}/{len(urls_to_try)}")
+
                     self.log_widget.append(f"🌐 URL: {url}")
+
                     
+
                     start_time = time.time()
+
                     r = requests.get(url, timeout=10, headers=headers)
+
                     end_time = time.time()
+
                     
+
                     response_time = end_time - start_time
+
                     self.log_widget.append(f"⏱️ Temps: {response_time:.2f}s | Statut: {r.status_code}")
+
                     
+
                     if r.status_code == 200:
+
                         content = r.text.strip()
+
                         if content:
+
                             clean_content = content.replace('\ufeff', '').replace('\r', '').replace('\n', '')
+
                             successful_results.append((clean_content, url, response_time))
+
                             self.log_widget.append(f"✅ Succès: '{clean_content}'")
+
                         else:
+
                             self.log_widget.append("⚠️ Réponse vide")
+
                     else:
+
                         self.log_widget.append(f"❌ Erreur HTTP: {r.status_code}")
+
                         
+
                 except Exception as e:
+
                     self.log_widget.append(f"❌ Exception: {e}")
+
                 
+
                 self.log_widget.append("")
+
                 time.sleep(0.5)  # Petite pause entre les tentatives
+
             
+
             # Analyse des résultats
+
             if successful_results:
+
                 self.log_widget.append("📊 ANALYSE DES RÉSULTATS:")
+
                 self.log_widget.append("=" * 50)
+
                 
+
                 # Grouper par version
+
                 version_groups = {}
+
                 for version, url, time_taken in successful_results:
+
                     if version not in version_groups:
+
                         version_groups[version] = []
+
                     version_groups[version].append((url, time_taken))
+
                 
+
                 for version, results in version_groups.items():
+
                     self.log_widget.append(f"📄 Version '{version}' trouvée {len(results)} fois:")
+
                     for url, time_taken in results:
+
                         self.log_widget.append(f"  🌐 {url} ({time_taken:.2f}s)")
+
                 
+
                 # Prendre la version la plus fréquente
+
                 most_common_version = max(version_groups.keys(), key=lambda v: len(version_groups[v]))
+
                 self.log_widget.append(f"\n🎯 Version la plus fréquente: '{most_common_version}'")
+
                 
+
                 # Comparaison avec version locale
+
                 try:
+
                     local_tuple = parse_version(VERSION)
+
                     remote_tuple = parse_version(most_common_version)
+
                     
+
                     self.log_widget.append(f"📊 Version locale: {VERSION} -> {local_tuple}")
+
                     self.log_widget.append(f"📊 Version GitHub: {most_common_version} -> {remote_tuple}")
+
                     
+
                     if local_tuple >= remote_tuple:
+
                         self.log_widget.append("✅ Application à jour")
+
                         self.update_label.setText(f"✅ Application à jour ({VERSION})")
+
                         self.update_btn.setEnabled(False)
+
                     else:
+
                         self.log_widget.append("⬇️ Mise à jour disponible")
+
                         self.update_label.setText(f"❌ Nouvelle version disponible ({most_common_version})")
+
                         self.update_btn.setEnabled(True)
+
                         
+
                 except Exception as e:
+
                     self.log_widget.append(f"❌ Erreur parsing: {e}")
+
             else:
+
                 self.log_widget.append("❌ Aucune requête réussie")
+
                 self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
+
                 self.update_btn.setEnabled(False)
+
                 
+
         except Exception as e:
+
             self.log_widget.append(f"❌ Erreur générale: {e}")
+
         finally:
+
             # Réactiver le bouton
+
             self.force_check_btn.setEnabled(True)
+
             self.force_check_btn.setText("⚡ Force Check")
+
         
+
         self.log_widget.append("=" * 70)
+
         self.log_widget.append("✅ VÉRIFICATION FORCÉE TERMINÉE")
+
         self.log_widget.append("=" * 70)
+
+
 
     def ultra_check_update(self):
+
         """Vérification ultra-rapide avec toutes les méthodes anti-cache"""
+
         self.log_widget.append("=" * 80)
+
         self.log_widget.append("🚀 ULTRA CHECK - Méthodes ultra-agressives anti-cache")
+
         self.log_widget.append("=" * 80)
+
         
+
         try:
+
             import time
+
             import random
+
             
+
             # Désactiver le bouton pendant la vérification
+
             self.ultra_check_btn.setEnabled(False)
+
             self.ultra_check_btn.setText("🚀 Ultra Check...")
+
             
+
             self.log_widget.append(f"🎯 Version locale: {VERSION}")
+
             self.log_widget.append(f"🌐 URL GitHub: {UPDATE_CHECK_URL}")
+
             self.log_widget.append("")
+
             
+
             # Méthodes ultra-multiples
+
             timestamp = int(time.time())
+
             random_hash = random.randint(100000, 999999)
+
             urls_to_try = [
+
                 UPDATE_CHECK_URL,
+
                 f"{UPDATE_CHECK_URL}?t={timestamp}",
+
                 f"{UPDATE_CHECK_URL}?v={timestamp}&nocache=1",
+
                 f"{UPDATE_CHECK_URL}?timestamp={timestamp}&force=1",
+
                 f"{UPDATE_CHECK_URL}?hash={random_hash}&t={timestamp}",
+
                 f"{UPDATE_CHECK_URL}?cache_bust={timestamp}&random={random_hash}",
+
                 f"{UPDATE_CHECK_URL}?refresh=1&t={timestamp}",
+
                 f"{UPDATE_CHECK_URL}?bypass_cache=1&v={timestamp}",
+
                 f"{UPDATE_CHECK_URL}?nocache=1&timestamp={timestamp}&random={random_hash}",
+
                 f"{UPDATE_CHECK_URL}?ms={int(time.time() * 1000)}",
+
                 f"{UPDATE_CHECK_URL}?micro={int(time.time() * 1000000)}"
+
             ]
+
             
+
             headers_variants = [
+
                 {
+
                     'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+
                     'Pragma': 'no-cache',
+
                     'Expires': '0',
+
                     'User-Agent': f'VMT-Path-Renamer-Ultra/{VERSION}',
+
                     'Accept': 'text/plain, */*',
+
                     'Connection': 'close'
+
                 },
+
                 {
+
                     'Cache-Control': 'no-cache',
+
                     'Pragma': 'no-cache',
+
                     'User-Agent': f'Mozilla/5.0 VMT-Path-Renamer/{VERSION}',
+
                     'Accept': '*/*',
+
                     'Connection': 'keep-alive'
+
                 },
+
                 {
+
                     'Cache-Control': 'no-store',
+
                     'User-Agent': f'VMT-Path-Renamer-UltraCheck/{VERSION}',
+
                     'Accept': 'text/plain',
+
                     'Connection': 'close'
+
                 }
+
             ]
+
             
+
             successful_results = []
+
             
+
             self.log_widget.append("🔄 Test de toutes les combinaisons URL + Headers...")
+
             
+
             for i, url in enumerate(urls_to_try):
+
                 for j, headers in enumerate(headers_variants):
+
                     try:
+
                         start_time = time.time()
+
                         r = requests.get(url, timeout=8, headers=headers)
+
                         end_time = time.time()
+
                         response_time = end_time - start_time
+
                         
+
                         if r.status_code == 200:
+
                             content = r.text.strip()
+
                             if content:
+
                                 clean_content = content.replace('\ufeff', '').replace('\r', '').replace('\n', '')
+
                                 successful_results.append((clean_content, url, response_time))
+
                                 self.log_widget.append(f"✅ {i+1}.{j+1}: '{clean_content}' ({response_time:.2f}s)")
+
                                 
+
                                 # Arrêter si on a assez de résultats cohérents
+
                                 if len(successful_results) >= 5:
+
                                     break
+
                             else:
+
                                 self.log_widget.append(f"⚠️ {i+1}.{j+1}: Réponse vide")
+
                         else:
+
                             self.log_widget.append(f"❌ {i+1}.{j+1}: HTTP {r.status_code}")
+
                             
+
                     except Exception as e:
+
                         self.log_widget.append(f"❌ {i+1}.{j+1}: {str(e)[:50]}...")
+
                 
+
                 if len(successful_results) >= 5:
+
                     break
+
                 time.sleep(0.05)  # Pause très courte
+
             
+
             # Analyse des résultats
+
             if successful_results:
+
                 self.log_widget.append("\n📊 ANALYSE ULTRA-RÉSULTATS:")
+
                 self.log_widget.append("=" * 60)
+
                 
+
                 # Grouper par version
+
                 version_groups = {}
+
                 for version, url, time_taken in successful_results:
+
                     if version not in version_groups:
+
                         version_groups[version] = []
+
                     version_groups[version].append((url, time_taken))
+
                 
+
                 for version, results in version_groups.items():
+
                     self.log_widget.append(f"📄 Version '{version}': {len(results)} fois")
+
                     for url, time_taken in results:
+
                         self.log_widget.append(f"  🌐 {url} ({time_taken:.2f}s)")
+
                 
+
                 # Prendre la version la plus fréquente
+
                 most_common_version = max(version_groups.keys(), key=lambda v: len(version_groups[v]))
+
                 most_common_count = len(version_groups[most_common_version])
+
                 
+
                 self.log_widget.append(f"\n🎯 VERSION ULTRA-CONFIRMÉE: '{most_common_version}'")
+
                 self.log_widget.append(f"📊 Trouvée {most_common_count} fois sur {len(successful_results)} tentatives")
+
                 
+
                 # Comparaison avec version locale
+
                 try:
+
                     local_tuple = parse_version(VERSION)
+
                     remote_tuple = parse_version(most_common_version)
+
                     
+
                     self.log_widget.append(f"📊 Version locale: {VERSION} -> {local_tuple}")
+
                     self.log_widget.append(f"📊 Version GitHub: {most_common_version} -> {remote_tuple}")
+
                     
+
                     if local_tuple >= remote_tuple:
+
                         self.log_widget.append("✅ APPLICATION À JOUR (ultra-confirmé)")
+
                         self.update_label.setText(f"✅ Application à jour ({VERSION})")
+
                         self.update_btn.setEnabled(False)
+
                     else:
+
                         self.log_widget.append("⬇️ MISE À JOUR DISPONIBLE (ultra-confirmé)")
+
                         self.update_label.setText(f"❌ Nouvelle version disponible ({most_common_version})")
+
                         self.update_btn.setEnabled(True)
+
                         
+
                 except Exception as e:
+
                     self.log_widget.append(f"❌ Erreur parsing: {e}")
+
             else:
+
                 self.log_widget.append("❌ Aucune requête réussie")
+
                 self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
+
                 self.update_btn.setEnabled(False)
+
                 
+
         except Exception as e:
+
             self.log_widget.append(f"❌ Erreur générale: {e}")
+
         finally:
+
             # Réactiver le bouton
+
             self.ultra_check_btn.setEnabled(True)
+
             self.ultra_check_btn.setText("🚀 Ultra Check")
+
         
+
         self.log_widget.append("=" * 80)
+
         self.log_widget.append("✅ ULTRA CHECK TERMINÉ")
+
         self.log_widget.append("=" * 80)
+
+
 
     def test_connection(self):
+
         """Test de connexion simple et rapide"""
-        self.log_widget.append("=" * 50)
-        self.log_widget.append("🌐 TEST DE CONNEXION SIMPLE")
-        self.log_widget.append("=" * 50)
-        
-        try:
-            import time
-            
-            # Test de base
-            self.log_widget.append(f"🌐 Test de connexion à: {UPDATE_CHECK_URL}")
-            
-            start_time = time.time()
-            r = requests.get(UPDATE_CHECK_URL, timeout=10)
-            end_time = time.time()
-            
-            response_time = end_time - start_time
-            
-            self.log_widget.append(f"⏱️ Temps de réponse: {response_time:.2f}s")
-            self.log_widget.append(f"📊 Statut HTTP: {r.status_code}")
-            self.log_widget.append(f"📏 Taille de la réponse: {len(r.text)} caractères")
-            
-            if r.status_code == 200:
-                content = r.text.strip()
-                self.log_widget.append(f"📄 Contenu: '{content}'")
-                
-                # Test de parsing
-                try:
-                    version_tuple = parse_version(content)
-                    self.log_widget.append(f"✅ Version parsée: {version_tuple}")
-                    
-                    # Comparaison rapide
-                    local_tuple = parse_version(VERSION)
-                    if local_tuple >= version_tuple:
-                        self.log_widget.append("✅ Application à jour")
-                    else:
-                        self.log_widget.append("⬇️ Mise à jour disponible")
-                        
-                except Exception as e:
-                    self.log_widget.append(f"❌ Erreur parsing: {e}")
-            else:
-                self.log_widget.append(f"❌ Erreur HTTP: {r.status_code}")
-                
-        except Exception as e:
-            self.log_widget.append(f"❌ Erreur de connexion: {e}")
-        
-        self.log_widget.append("=" * 50)
-        self.log_widget.append("✅ TEST DE CONNEXION TERMINÉ")
+
         self.log_widget.append("=" * 50)
 
+        self.log_widget.append("🌐 TEST DE CONNEXION SIMPLE")
+
+        self.log_widget.append("=" * 50)
+
+        
+
+        try:
+
+            import time
+
+            
+
+            # Test de base
+
+            self.log_widget.append(f"🌐 Test de connexion à: {UPDATE_CHECK_URL}")
+
+            
+
+            start_time = time.time()
+
+            r = requests.get(UPDATE_CHECK_URL, timeout=10)
+
+            end_time = time.time()
+
+            
+
+            response_time = end_time - start_time
+
+            
+
+            self.log_widget.append(f"⏱️ Temps de réponse: {response_time:.2f}s")
+
+            self.log_widget.append(f"📊 Statut HTTP: {r.status_code}")
+
+            self.log_widget.append(f"📏 Taille de la réponse: {len(r.text)} caractères")
+
+            
+
+            if r.status_code == 200:
+
+                content = r.text.strip()
+
+                self.log_widget.append(f"📄 Contenu: '{content}'")
+
+                
+
+                # Test de parsing
+
+                try:
+
+                    version_tuple = parse_version(content)
+
+                    self.log_widget.append(f"✅ Version parsée: {version_tuple}")
+
+                    
+
+                    # Comparaison rapide
+
+                    local_tuple = parse_version(VERSION)
+
+                    if local_tuple >= version_tuple:
+
+                        self.log_widget.append("✅ Application à jour")
+
+                    else:
+
+                        self.log_widget.append("⬇️ Mise à jour disponible")
+
+                        
+
+                except Exception as e:
+
+                    self.log_widget.append(f"❌ Erreur parsing: {e}")
+
+            else:
+
+                self.log_widget.append(f"❌ Erreur HTTP: {r.status_code}")
+
+                
+
+        except Exception as e:
+
+            self.log_widget.append(f"❌ Erreur de connexion: {e}")
+
+        
+
+        self.log_widget.append("=" * 50)
+
+        self.log_widget.append("✅ TEST DE CONNEXION TERMINÉ")
+
+        self.log_widget.append("=" * 50)
+
+
+
 # ------------------ Lancement ------------------
+
 if __name__ == "__main__":
+
     try:
+
         app = QApplication(sys.argv)
+
         window = VMTPathRenamer()
+
         window.show()
+
         sys.exit(app.exec_())
+
     except Exception as e:
+
         log_crash(str(e))
+
         print(f"Erreur au lancement : {e}")
+
         input("Appuyez sur Entrée pour quitter...")
+
+
+
