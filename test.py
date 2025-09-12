@@ -1696,5 +1696,3 @@ if __name__ == "__main__":
         log_crash(str(e))
         print(f"Erreur au lancement : {e}")
         input("Appuyez sur Entrée pour quitter...")
-
-
