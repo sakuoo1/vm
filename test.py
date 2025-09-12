@@ -830,7 +830,7 @@ def require_authentication():
 
 # ------------------ VERSION ------------------
 
-VERSION = "15.0.0"  # version locale
+VERSION = "13.0.0"  # version locale
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 
