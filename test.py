@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt, QTimer
 
 # ------------------ VERSION ------------------
 
-VERSION = "12.0.0"  # version locale
+VERSION = "13.0.0"  # version locale
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 
@@ -2274,6 +2274,7 @@ if __name__ == "__main__":
         print(f"Erreur au lancement : {e}")
 
         input("Appuyez sur Entrée pour quitter...")
+
 
 
 
