@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt
 # ------------------ VERSION ------------------
 VERSION = "0.1"  # Version locale de départ
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
-UPDATE_SCRIPT_URL = "https://github.com/sakuoo1/vm/blob/main/test.py"
+UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 
 
 def parse_version(v):
@@ -413,4 +413,5 @@ if __name__ == "__main__":
     window = VMTPathRenamer()
     window.show()
     sys.exit(app.exec_())
+
 
