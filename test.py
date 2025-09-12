@@ -10,6 +10,12 @@ import time
 
 import requests
 
+import platform
+
+import subprocess
+
+import uuid
+
 from PyQt5.QtWidgets import (
 
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
@@ -24,6 +30,70 @@ import hashlib
 from PyQt5.QtWidgets import QDialog, QProgressBar
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QFont
+
+def get_hardware_id():
+    """Génère un identifiant unique basé sur le matériel du PC"""
+    try:
+        # Récupérer plusieurs identifiants matériels
+        system_info = []
+        
+        # UUID de la carte mère (Windows)
+        try:
+            if platform.system() == "Windows":
+                result = subprocess.run(['wmic', 'csproduct', 'get', 'uuid'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines:
+                        if line.strip() and 'UUID' not in line:
+                            system_info.append(line.strip())
+                            break
+        except:
+            pass
+        
+        # Numéro de série du processeur
+        try:
+            if platform.system() == "Windows":
+                result = subprocess.run(['wmic', 'cpu', 'get', 'processorid'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines:
+                        if line.strip() and 'ProcessorId' not in line:
+                            system_info.append(line.strip())
+                            break
+        except:
+            pass
+        
+        # MAC Address de la première interface réseau
+        try:
+            mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
+                           for elements in range(0,2*6,2)][::-1])
+            system_info.append(mac)
+        except:
+            pass
+        
+        # Nom de la machine
+        system_info.append(platform.node())
+        
+        # Système d'exploitation
+        system_info.append(platform.system() + platform.release())
+        
+        # Si on n'a rien récupéré, utiliser un UUID aléatoire basé sur le node
+        if not system_info:
+            system_info.append(str(uuid.getnode()))
+        
+        # Créer un hash unique à partir de toutes ces informations
+        combined = ''.join(system_info)
+        hwid = hashlib.sha256(combined.encode()).hexdigest()[:32]
+        
+        print(f"🔧 HWID généré: {hwid}")
+        return hwid
+        
+    except Exception as e:
+        print(f"❌ Erreur génération HWID: {e}")
+        # Fallback: utiliser l'UUID du node
+        return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()[:32]
 
 class AuthWorker(QThread):
     """Thread pour vérifier la clé sans bloquer l'interface"""
@@ -78,6 +148,22 @@ class AuthWorker(QThread):
                             self.auth_result.emit(False, "Clé expirée", "")
                             return
                     
+                    # Vérifier le HWID (Hardware ID)
+                    current_hwid = get_hardware_id()
+                    stored_hwid = key_data.get('hardware_id')
+                    
+                    if stored_hwid is None:
+                        # Première utilisation de la clé - enregistrer le HWID
+                        print(f"🔧 Première utilisation - Enregistrement HWID: {current_hwid}")
+                        self.update_hardware_id(key_data['id'], current_hwid)
+                    elif stored_hwid != current_hwid:
+                        # HWID différent - accès refusé
+                        print(f"❌ HWID mismatch - Stocké: {stored_hwid}, Actuel: {current_hwid}")
+                        self.auth_result.emit(False, "Cette clé est liée à un autre ordinateur. Accès refusé.", "")
+                        return
+                    else:
+                        print(f"✅ HWID vérifié: {current_hwid}")
+                    
                     # Mettre à jour la dernière utilisation
                     print(f"Authentification reussie pour cle ID: {key_data['id']}")
                     self.update_last_used(key_data['id'])
@@ -120,6 +206,24 @@ class AuthWorker(QThread):
         except Exception as e:
             print(f"❌ Erreur update_last_used: {str(e)}")  
     
+    def update_hardware_id(self, key_id, hwid):
+        """Met à jour le HWID associé à une clé"""
+        try:
+            headers = {
+                'apikey': self.supabase_key,
+                'Authorization': f'Bearer {self.supabase_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            url = f"{self.supabase_url}/rest/v1/access_keys?id=eq.{key_id}"
+            data = {'hardware_id': hwid}
+            
+            response = requests.patch(url, json=data, headers=headers, timeout=5)
+            print(f"✅ HWID enregistré: {response.status_code}")
+            
+        except Exception as e:
+            print(f"❌ Erreur update_hardware_id: {str(e)}")
+
     def reset_revalidation_flag(self, key_id):
         """Réinitialise le flag de revalidation forcée après utilisation"""
         try:
@@ -2249,7 +2353,7 @@ def require_authentication():
 
 
 
-VERSION = "17.7.0"  # version locale
+VERSION = "17.8.0"  # version locale
 
 
 
