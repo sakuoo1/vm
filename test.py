@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLay
 from PyQt5.QtCore import Qt
 import os
 
-VERSION = "1.0.0"  # Version locale
+VERSION = "2.0.0"  # Version locale
 GITHUB_VERSION_URL = "https://raw.githubusercontent.com/tonrepo/version.txt"
 GITHUB_UPDATE_URL = "https://raw.githubusercontent.com/tonrepo/main.py"  # Fichier à télécharger
 
@@ -103,3 +103,4 @@ if __name__ == "__main__":
     window = UpdateChecker()
     window.show()
     app.exec_()
+
