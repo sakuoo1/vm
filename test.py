@@ -6089,6 +6089,9 @@ class VMTPathRenamer(QWidget):
 
 
                 self.log_widget.append(f"[{current_time}] 🔔 Mise à jour détectée automatiquement: {latest_version}")
+                
+                # Forcer l'installation même en mode silencieux
+                self.force_update_installation(latest_version)
 
 
 
@@ -6141,7 +6144,7 @@ class VMTPathRenamer(QWidget):
 
 
     def force_update_installation(self, latest_version):
-        """ installer la mise à jour"""
+        """Force l'utilisateur à installer la mise à jour"""
         # Désactiver toute l'interface
         self.setEnabled(False)
         
@@ -7361,6 +7364,9 @@ Cliquez sur "Installer" pour continuer.
 
 
                     self.log_widget.append("⬇️ Mise à jour disponible (vs fichier test)")
+                    
+                    # Forcer l'installation de la mise à jour
+                    self.force_update_installation(test_version)
 
 
 
@@ -8329,6 +8335,9 @@ Cliquez sur "Installer" pour continuer.
 
 
                         self.log_widget.append("⬇️ Mise à jour disponible")
+                        
+                        # Forcer l'installation de la mise à jour
+                        self.force_update_installation(most_common_version)
 
 
 
@@ -9437,6 +9446,9 @@ Cliquez sur "Installer" pour continuer.
 
 
                         self.log_widget.append("⬇️ MISE À JOUR DISPONIBLE (ultra-confirmé)")
+                        
+                        # Forcer l'installation de la mise à jour
+                        self.force_update_installation(most_common_version)
 
 
 
