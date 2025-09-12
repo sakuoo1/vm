@@ -20,8 +20,6 @@ from PyQt5.QtWidgets import (
 
 from PyQt5.QtCore import Qt, QTimer
 
-# ------------------ SYSTÈME D'AUTHENTIFICATION INTÉGRÉ ------------------
-
 import hashlib
 from PyQt5.QtWidgets import QDialog, QProgressBar
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -39,17 +37,17 @@ class AuthWorker(QThread):
     
     def run(self):
         try:
-            # Hacher la clé pour la sécurité
+
             key_hash = hashlib.sha256(self.key.encode()).hexdigest()
             
-            # Requête vers Supabase pour vérifier la clé
+
             headers = {
                 'apikey': self.supabase_key,
                 'Authorization': f'Bearer {self.supabase_key}',
                 'Content-Type': 'application/json'
             }
             
-            # Vérifier si la clé existe et est active
+
             url = f"{self.supabase_url}/rest/v1/access_keys?key_hash=eq.{key_hash}&is_active=eq.true"
             
             response = requests.get(url, headers=headers, timeout=10)
@@ -57,10 +55,10 @@ class AuthWorker(QThread):
             if response.status_code == 200:
                 data = response.json()
                 if data and len(data) > 0:
-                    # Clé valide trouvée
+
                     key_data = data[0]
                     
-                    # Vérifier la date d'expiration si elle existe
+
                     if 'expires_at' in key_data and key_data['expires_at']:
                         from datetime import datetime
                         expires_at = datetime.fromisoformat(key_data['expires_at'].replace('Z', '+00:00'))
@@ -68,10 +66,10 @@ class AuthWorker(QThread):
                             self.auth_result.emit(False, "Clé expirée", "")
                             return
                     
-                    # Mettre à jour la dernière utilisation
+
                     self.update_last_used(key_data['id'])
                     
-                    # Stocker le rôle de l'utilisateur
+
                     user_role = key_data.get('role', 'user')
                     self.auth_result.emit(True, f"Accès autorisé - {key_data.get('description', 'Utilisateur')} ({user_role})", user_role)
                 else:
@@ -100,7 +98,7 @@ class AuthWorker(QThread):
             
             requests.patch(url, json=data, headers=headers, timeout=5)
         except:
-            pass  # Ignore les erreurs de mise à jour
+            pass  
 
 class AuthDialog(QDialog):
     def __init__(self):
@@ -108,7 +106,7 @@ class AuthDialog(QDialog):
         self.authenticated = False
         self.worker = None
         
-        # Configuration Supabase (à personnaliser)
+
         self.SUPABASE_URL = "https://cmdfrwnfaxapwfydebyr.supabase.co"
         self.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtZGZyd25mYXhhcHdmeWRlYnlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc2NDIwODYsImV4cCI6MjA3MzIxODA4Nn0.NFnhaMp0b7syG8tNVzOIoLiessvyLxUl6jLzIMLsGds"
         
@@ -830,7 +828,7 @@ def require_authentication():
 
 # ------------------ VERSION ------------------
 
-VERSION = "15.1.0"  # version locale
+VERSION = "16.0.0"  # version locale
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 
@@ -4915,4 +4913,3 @@ if __name__ == "__main__":
         log_crash(str(e))
         print(f"Erreur au lancement : {e}")
         input("Appuyez sur Entrée pour quitter...")
-
