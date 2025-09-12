@@ -11,30 +11,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 # ------------------ VERSION ------------------
-VERSION = "0.2"
+VERSION = "0.3"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 
+# ------------------ Fonctions utilitaires ------------------
 def parse_version(v):
-    return tuple(map(int, v.strip().split(".")))
+    """Convertit '0.2' ou '1.0.3' en tuple d'entiers (0,2) ou (1,0,3)"""
+    return tuple(int(x) for x in v.strip().split('.') if x.isdigit())
 
-# ------------------ Thread vérification mise à jour ------------------
-class UpdateCheckerThread(QThread):
-    result = pyqtSignal(str, bool)  # latest_version, up_to_date
-
-    def run(self):
-        try:
-            r = requests.get(UPDATE_CHECK_URL, timeout=5)
-            if r.status_code == 200:
-                latest_version = r.text.strip()
-                up_to_date = parse_version(VERSION) >= parse_version(latest_version)
-                self.result.emit(latest_version, up_to_date)
-            else:
-                self.result.emit("Erreur", True)
-        except Exception:
-            self.result.emit("Erreur", True)
-
-# ------------------ Fonctions VMT/Dossier ------------------
 def read_file(path):
     for enc in ('utf-8','cp1252','latin-1'):
         try:
@@ -44,6 +29,27 @@ def read_file(path):
             continue
     raise Exception(f"Impossible de lire {path}")
 
+# ------------------ Thread vérification mise à jour ------------------
+class UpdateCheckerThread(QThread):
+    result = pyqtSignal(str, bool)  # latest_version, up_to_date
+
+    def run(self):
+        try:
+            r = requests.get(UPDATE_CHECK_URL, timeout=5)
+            if r.status_code == 200:
+                latest_version_raw = r.text.strip().replace('\r','').replace('\n','')
+                try:
+                    up_to_date = parse_version(VERSION) >= parse_version(latest_version_raw)
+                except Exception:
+                    up_to_date = True
+                self.result.emit(latest_version_raw, up_to_date)
+            else:
+                self.result.emit("Erreur", True)
+        except Exception as e:
+            print(f"[DEBUG] Erreur update: {e}")
+            self.result.emit("Erreur", True)
+
+# ------------------ Fonctions VMT/Dossier ------------------
 def replace_paths_in_vmt(MATERIALS_DIR, NEW_PATH, log_widget):
     key_pattern = re.compile(r'(\$[a-z0-9_]+\s+)(["\'])([^"\']+)(["\'])', re.IGNORECASE)
     any_quoted = re.compile(r'(["\'])([^"\']*[/\\][^"\']*)\1')
@@ -138,7 +144,6 @@ class AddonMaterialCollector(QDialog):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        # Addon folder
         addon_group = QGroupBox("Dossier de l'addon")
         addon_layout = QHBoxLayout()
         self.addon_entry = QLineEdit()
@@ -149,7 +154,6 @@ class AddonMaterialCollector(QDialog):
         addon_group.setLayout(addon_layout)
         layout.addWidget(addon_group)
 
-        # Target folder
         target_group = QGroupBox("Dossier de destination")
         target_layout = QHBoxLayout()
         self.target_entry = QLineEdit()
@@ -160,7 +164,6 @@ class AddonMaterialCollector(QDialog):
         target_group.setLayout(target_layout)
         layout.addWidget(target_group)
 
-        # Filter
         filter_group = QGroupBox("Filtre de matériau (optionnel)")
         filter_layout = QHBoxLayout()
         self.filter_entry = QLineEdit()
@@ -168,17 +171,14 @@ class AddonMaterialCollector(QDialog):
         filter_group.setLayout(filter_layout)
         layout.addWidget(filter_group)
 
-        # Collect button
         self.collect_btn = QPushButton("✅ Lancer la collecte")
         self.collect_btn.clicked.connect(self.collect_materials)
         layout.addWidget(self.collect_btn)
 
-        # Logs
         layout.addWidget(QLabel("Journal d'activité"))
         self.log_widget = QTextEdit()
         self.log_widget.setReadOnly(True)
         layout.addWidget(self.log_widget)
-
         self.setLayout(layout)
 
     def browse_addon(self):
@@ -240,9 +240,9 @@ class VMTPathRenamer(QWidget):
         self.init_ui()
         self.start_update_check()
 
+    # UI
     def init_ui(self):
         layout = QVBoxLayout()
-        # Update check
         update_layout = QHBoxLayout()
         self.update_label = QLabel("🔄 Vérification mise à jour...")
         self.update_btn = QPushButton("⬇️ Télécharger mise à jour")
@@ -252,7 +252,6 @@ class VMTPathRenamer(QWidget):
         update_layout.addWidget(self.update_btn)
         layout.addLayout(update_layout)
 
-        # Folder selection
         folder_group = QGroupBox("Dossier à scanner")
         folder_layout = QHBoxLayout()
         self.folder_entry = QLineEdit()
@@ -263,7 +262,6 @@ class VMTPathRenamer(QWidget):
         folder_group.setLayout(folder_layout)
         layout.addWidget(folder_group)
 
-        # New path
         path_group = QGroupBox("Nouveau chemin (ex: models/nrxa/mayd3)")
         path_layout = QHBoxLayout()
         self.path_entry = QLineEdit()
@@ -271,7 +269,6 @@ class VMTPathRenamer(QWidget):
         path_group.setLayout(path_layout)
         layout.addWidget(path_group)
 
-        # Prefix/Suffix
         prefix_group = QGroupBox("Préfixe/Suffixe (optionnel)")
         prefix_layout = QHBoxLayout()
         self.prefix_entry = QLineEdit()
@@ -279,7 +276,6 @@ class VMTPathRenamer(QWidget):
         prefix_group.setLayout(prefix_layout)
         layout.addWidget(prefix_group)
 
-        # Actions
         action_group = QGroupBox("Actions")
         action_layout = QHBoxLayout()
         self.run_vmt_btn = QPushButton("🔄 Modifier chemins VMT")
@@ -293,20 +289,16 @@ class VMTPathRenamer(QWidget):
         action_group.setLayout(action_layout)
         layout.addWidget(action_group)
 
-        # Logs
         layout.addWidget(QLabel("Journal d'activité"))
         self.log_widget = QTextEdit()
         self.log_widget.setReadOnly(True)
         layout.addWidget(self.log_widget)
 
-        # Detected folders
         layout.addWidget(QLabel("Dossiers détectés"))
         self.detected_dirs_widget = QTextEdit()
         layout.addWidget(self.detected_dirs_widget)
-
         self.setLayout(layout)
 
-        # Connect buttons
         self.run_vmt_btn.clicked.connect(self.run_vmt)
         self.run_rename_btn.clicked.connect(self.run_rename)
         self.scan_btn.clicked.connect(self.scan_vmt_dirs)
@@ -314,7 +306,7 @@ class VMTPathRenamer(QWidget):
         self.apply_move_btn.clicked.connect(self.apply_move_vmt_vtf)
         self.addon_window_btn.clicked.connect(self.open_addon_collector)
 
-    # ------------------ Fonctions ------------------
+    # Fonctions
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Choisir un dossier")
         if folder:
@@ -390,7 +382,7 @@ class VMTPathRenamer(QWidget):
         dlg = AddonMaterialCollector()
         dlg.exec_()
 
-    # ------------------ Mise à jour ------------------
+    # Mise à jour
     def start_update_check(self):
         self.update_thread = UpdateCheckerThread()
         self.update_thread.result.connect(self.update_check_result)
