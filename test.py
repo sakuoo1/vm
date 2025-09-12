@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
 
-    QTextEdit, QVBoxLayout, QHBoxLayout, QFileDialog, QGroupBox, QMessageBox
+    QTextEdit, QVBoxLayout, QHBoxLayout, QFileDialog, QGroupBox, QMessageBox, QComboBox
 
 )
 
@@ -22,11 +22,14 @@ from PyQt5.QtCore import Qt
 
 # ------------------ VERSION ------------------
 
-VERSION = "11.0.0"  # version locale
+VERSION = "9.0.0"  # version locale
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 
 UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
+
+# Variable globale pour stocker la meilleure URL de téléchargement
+BEST_UPDATE_URL = UPDATE_SCRIPT_URL
 
 
 
@@ -43,19 +46,19 @@ def parse_version(v):
 
 
 def log_crash(error_text):
-
-    """Crée un fichier crash.txt avec l'erreur"""
-
+    """Crée un fichier crash.txt avec l'erreur seulement pour les vraies erreurs critiques"""
     try:
-
+        # Ne pas créer de crash.txt pour les erreurs de réseau normales
+        if any(keyword in error_text.lower() for keyword in [
+            "timeout", "connexion", "récupérer la version", "vérification de mise à jour"
+        ]):
+            print(f"[INFO] Erreur réseau normale (pas de crash.txt): {error_text}")
+            return
+            
         crash_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "crash.txt")
-
         with open(crash_path, "w", encoding="utf-8") as f:
-
-            f.write(error_text)
-
+            f.write(f"ERREUR CRITIQUE:\n{error_text}\n\nCeci n'est PAS une erreur de réseau normale.")
     except Exception:
-
         pass  # si écrire le crash échoue, on ignore
 
 
@@ -71,25 +74,22 @@ def check_update():
         
         # Méthodes ultra-multiples pour contourner le cache GitHub
         timestamp = int(time.time())
+        microseconds = int(time.time() * 1000000)
         random_hash = random.randint(100000, 999999)
+        
+        # URLs multiples pour éviter le cache GitHub
+        jsdelivr_url = UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/")
+        statically_url = UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/")
+        
         urls_to_try = [
-            # URL originale
-            UPDATE_CHECK_URL,
-            # URLs avec timestamps variés
-            f"{UPDATE_CHECK_URL}?t={timestamp}",
-            f"{UPDATE_CHECK_URL}?v={timestamp}&nocache=1",
-            f"{UPDATE_CHECK_URL}?timestamp={timestamp}&force=1",
-            f"{UPDATE_CHECK_URL}?hash={random_hash}&t={timestamp}",
-            f"{UPDATE_CHECK_URL}?cache_bust={timestamp}&random={random_hash}",
-            # URLs avec paramètres différents
-            f"{UPDATE_CHECK_URL}?refresh=1&t={timestamp}",
-            f"{UPDATE_CHECK_URL}?bypass_cache=1&v={timestamp}",
-            f"{UPDATE_CHECK_URL}?nocache=1&timestamp={timestamp}&random={random_hash}",
-            # URL alternative GitHub
-            UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "github.com").replace("/main/", "/blob/main/"),
-            # URLs avec millisecondes
-            f"{UPDATE_CHECK_URL}?ms={int(time.time() * 1000)}",
-            f"{UPDATE_CHECK_URL}?micro={int(time.time() * 1000000)}"
+            # CDN alternatifs UNIQUEMENT (ignorer GitHub complètement)
+            f"{jsdelivr_url}?t={microseconds}",
+            f"{statically_url}?t={microseconds}",
+            jsdelivr_url,
+            statically_url,
+            # Autres CDN de secours
+            UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "gitcdn.xyz/repo").replace("/main/", "/main/"),
+            UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "raw.githubusercontents.com")
         ]
         
         # Headers ultra-agressifs
@@ -119,89 +119,246 @@ def check_update():
         ]
         
         successful_results = []
+        highest_version = None
+        highest_version_tuple = (0, 0, 0)
+        highest_version_url = None
+        local_version_tuple = parse_version(VERSION)
         
-        # Essayer toutes les combinaisons URL + headers
+        print(f"[DEBUG] Version locale tuple: {local_version_tuple}")
+        
+        print(f"[DEBUG] Test prioritaire des CDN (éviter GitHub)...")
+        
         for i, url in enumerate(urls_to_try):
-            for j, headers in enumerate(headers_variants):
-                try:
-                    print(f"[DEBUG] Tentative {i+1}.{j+1}: {url}")
+            try:
+                print(f"[DEBUG] Test CDN {i+1}: {url[:80]}...")
+                
+                # Headers simples pour CDN
+                headers = {
+                    'Cache-Control': 'no-cache',
+                    'User-Agent': f'VMT-Path-Renamer/{VERSION}',
+                    'Accept': 'text/plain'
+                }
+                
+                r = requests.get(url, headers=headers, timeout=10)
+                
+                if r.status_code == 200:
+                    latest_version_raw = r.text.strip()
+                    # Nettoyer la version (enlever BOM, espaces, retours à la ligne)
+                    latest_version_clean = latest_version_raw.replace('\ufeff', '').replace('\r', '').replace('\n', '').strip()
+                    print(f"[DEBUG] Version trouvée: '{latest_version_clean}' depuis CDN")
                     
-                    r = requests.get(url, timeout=10, headers=headers)
-                    print(f"[DEBUG] Statut HTTP: {r.status_code}")
+                    version_tuple = parse_version(latest_version_clean)
+                    if version_tuple > highest_version_tuple:
+                        highest_version = latest_version_clean
+                        highest_version_tuple = version_tuple
+                        highest_version_url = url
+                        print(f"[DEBUG] Nouvelle version la plus haute: {highest_version}")
+                        
+                        # Arrêter dès qu'on trouve une version plus récente que la locale
+                        if version_tuple > local_version_tuple:
+                            print(f"[DEBUG] Version plus récente trouvée depuis CDN, arrêt")
+                            break
+                else:
+                    print(f"[DEBUG] CDN {i+1} - Erreur HTTP {r.status_code}")
                     
-                    if r.status_code == 200:
-                        latest_version_raw = r.text.strip()
-                        print(f"[DEBUG] Version brute: '{latest_version_raw}'")
-                        
-                        if latest_version_raw:
-                            latest_version_clean = latest_version_raw.replace('\ufeff', '').replace('\r', '').replace('\n', '')
-                            successful_results.append((latest_version_clean, url, headers))
-                            print(f"[DEBUG] ✅ Succès avec URL {i+1}.{j+1}")
-                            
-                            # Si on a plusieurs résultats cohérents, on peut s'arrêter
-                            if len(successful_results) >= 3:
-                                break
-                        else:
-                            print(f"[DEBUG] ⚠️ Réponse vide avec URL {i+1}.{j+1}")
-                    else:
-                        print(f"[DEBUG] ❌ Erreur HTTP {r.status_code} avec URL {i+1}.{j+1}")
-                        
-                except Exception as e:
-                    print(f"[DEBUG] ❌ Exception avec URL {i+1}.{j+1}: {e}")
-                    continue
-            
+            except requests.exceptions.Timeout:
+                print(f"[DEBUG] CDN {i+1} - Timeout")
+                continue
+            except requests.exceptions.ConnectionError:
+                print(f"[DEBUG] CDN {i+1} - Erreur de connexion")
+                continue
+            except Exception as e:
+                print(f"[DEBUG] CDN {i+1} - Erreur: {e}")
+                continue
+                
             # Petite pause entre les URLs pour éviter le rate limiting
             time.sleep(0.1)
         
-        if not successful_results:
-            return "Erreur", False, "Impossible de récupérer la version depuis GitHub"
+        if not highest_version:
+            print("[INFO] Aucune version récupérée depuis les CDN")
+            return "Erreur", False, "Impossible d'accéder aux serveurs de mise à jour"
         
-        # Analyser les résultats pour trouver la version la plus fréquente
-        version_counts = {}
-        for version, url, headers in successful_results:
-            if version not in version_counts:
-                version_counts[version] = []
-            version_counts[version].append((url, headers))
-        
-        # Prendre la version la plus fréquente
-        most_common_version = max(version_counts.keys(), key=lambda v: len(version_counts[v]))
-        most_common_count = len(version_counts[most_common_version])
-        
-        print(f"[DEBUG] Résultats: {len(successful_results)} succès")
-        for version, results in version_counts.items():
-            print(f"[DEBUG] Version '{version}': {len(results)} fois")
-        
-        print(f"[DEBUG] Version finale: '{most_common_version}' (trouvée {most_common_count} fois)")
-        
-        # Parsing et comparaison
-        local_version_tuple = parse_version(VERSION)
-        latest_version_tuple = parse_version(most_common_version)
-        
-        print(f"[DEBUG] Version locale tuple: {local_version_tuple}")
-        print(f"[DEBUG] Version GitHub tuple: {latest_version_tuple}")
-        
-        up_to_date = local_version_tuple >= latest_version_tuple
-        print(f"[DEBUG] À jour: {up_to_date}")
-        
-        return most_common_version, up_to_date, f"Récupéré {most_common_count} fois depuis GitHub"
+        # Utiliser la version la plus haute trouvée
+        if highest_version:
+            print(f"[DEBUG] Version finale (la plus haute): '{highest_version}' depuis {highest_version_url}")
+            
+            # Sauvegarder l'URL de la version la plus haute pour le téléchargement
+            if highest_version_url:
+                global BEST_UPDATE_URL
+                # Convertir l'URL de version vers l'URL du script
+                if "jsdelivr.net" in highest_version_url:
+                    BEST_UPDATE_URL = highest_version_url.replace("version.txt", "test.py")
+                elif "statically.io" in highest_version_url:
+                    BEST_UPDATE_URL = highest_version_url.replace("version.txt", "test.py")
+                else:
+                    BEST_UPDATE_URL = UPDATE_SCRIPT_URL
+                print(f"[DEBUG] URL de téléchargement: {BEST_UPDATE_URL}")
+            
+            up_to_date = local_version_tuple >= highest_version_tuple
+            print(f"[DEBUG] À jour: {up_to_date}")
+            
+            return highest_version, up_to_date, f"Version la plus haute trouvée: {highest_version}"
+        else:
+            return "Erreur", False, "Aucune version valide trouvée"
         
     except requests.exceptions.Timeout:
         error_msg = "Timeout lors de la vérification de mise à jour"
-        print(f"[DEBUG] {error_msg}")
-        log_crash(error_msg)
-        return "Erreur", False, error_msg
+        print(f"[INFO] {error_msg} - Réessayez plus tard")
+        return "Erreur", False, "Timeout réseau - Réessayez dans quelques minutes"
     except requests.exceptions.ConnectionError:
         error_msg = "Erreur de connexion lors de la vérification de mise à jour"
-        print(f"[DEBUG] {error_msg}")
-        log_crash(error_msg)
-        return "Erreur", False, error_msg
+        print(f"[INFO] {error_msg} - Vérifiez votre connexion internet")
+        return "Erreur", False, "Pas de connexion internet"
     except Exception as e:
         error_msg = f"Erreur lors de la vérification de mise à jour: {e}"
         print(f"[DEBUG] {error_msg}")
-        log_crash(error_msg)
-        return "Erreur", False, error_msg
+        # Seulement créer crash.txt pour les vraies erreurs critiques
+        if "parse" in str(e).lower() or "critical" in str(e).lower():
+            log_crash(error_msg)
+        return "Erreur", False, f"Erreur technique: {str(e)[:50]}..."
 
 
+
+# ------------------ Fonctions de conversion VTF ------------------
+
+def convert_vtf_to_tga_with_vtfedit(vtf_path, output_path):
+    """Convertit un fichier VTF en TGA en utilisant VTFEdit en arrière-plan"""
+    try:
+        import subprocess
+        import time
+        
+        # Chercher VTFEdit.exe dans différents emplacements
+        vtfedit_paths = [
+            "VTFEdit.exe",
+            "vtfedit.exe",
+            os.path.join(os.path.dirname(__file__), "VTFEdit.exe"),
+            os.path.join(os.path.dirname(__file__), "tools", "VTFEdit.exe"),
+            r"C:\Program Files (x86)\Nem's Tools\VTFEdit\VTFEdit.exe",
+            r"C:\Program Files\Nem's Tools\VTFEdit\VTFEdit.exe",
+            r"C:\VTFEdit\VTFEdit.exe"
+        ]
+        
+        vtfedit_path = None
+        for path in vtfedit_paths:
+            if os.path.exists(path):
+                vtfedit_path = path
+                break
+        
+        if not vtfedit_path:
+            return False, "VTFEdit.exe non trouvé. Installez VTFEdit ou placez-le dans le dossier."
+        
+        # Créer le dossier de sortie si nécessaire
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Commande VTFEdit pour conversion automatique en arrière-plan
+        # VTFEdit supporte les arguments en ligne de commande pour l'export
+        cmd = [
+            vtfedit_path,
+            "-file", vtf_path,
+            "-output", output_path,
+            "-format", "tga",
+            "-silent"  # Mode silencieux sans interface
+        ]
+        
+        # Essayer aussi avec des paramètres alternatifs si la première commande échoue
+        alternative_cmds = [
+            [vtfedit_path, vtf_path, "-export", output_path],
+            [vtfedit_path, "-convert", vtf_path, output_path, "-format:tga"],
+            [vtfedit_path, "/file:" + vtf_path, "/output:" + output_path, "/format:tga"]
+        ]
+        
+        # Essayer la commande principale
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW  # Pas de fenêtre
+            )
+            
+            if result.returncode == 0 and os.path.exists(output_path):
+                return True, f"Converti avec VTFEdit: {os.path.basename(vtf_path)}"
+                
+        except Exception:
+            pass
+        
+        # Essayer les commandes alternatives
+        for alt_cmd in alternative_cmds:
+            try:
+                result = subprocess.run(
+                    alt_cmd, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=30,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                
+                # Attendre un peu que le fichier soit créé
+                time.sleep(0.5)
+                
+                if os.path.exists(output_path):
+                    return True, f"Converti avec VTFEdit (alt): {os.path.basename(vtf_path)}"
+                    
+            except Exception:
+                continue
+        
+        # Si aucune méthode n'a fonctionné, essayer d'ouvrir VTFEdit et utiliser l'automation Windows
+        return convert_vtf_with_automation(vtf_path, output_path, vtfedit_path)
+        
+    except Exception as e:
+        return False, f"Erreur VTFEdit: {e}"
+
+def convert_vtf_with_automation(vtf_path, output_path, vtfedit_path):
+    """Conversion VTF avec automation Windows (dernier recours)"""
+    try:
+        import subprocess
+        import time
+        
+        # Lancer VTFEdit en arrière-plan
+        process = subprocess.Popen([vtfedit_path], creationflags=subprocess.CREATE_NO_WINDOW)
+        time.sleep(2)  # Attendre que VTFEdit se lance
+        
+        try:
+            # Utiliser pyautogui ou win32gui pour automatiser (si disponible)
+            import pyautogui
+            
+            # Ouvrir le fichier (Ctrl+O)
+            pyautogui.hotkey('ctrl', 'o')
+            time.sleep(1)
+            
+            # Taper le chemin du fichier
+            pyautogui.write(vtf_path)
+            pyautogui.press('enter')
+            time.sleep(2)
+            
+            # Exporter (Ctrl+E ou File > Export)
+            pyautogui.hotkey('ctrl', 'e')
+            time.sleep(1)
+            
+            # Taper le chemin de sortie
+            pyautogui.write(output_path)
+            pyautogui.press('enter')
+            time.sleep(2)
+            
+            # Fermer VTFEdit
+            pyautogui.hotkey('alt', 'f4')
+            
+            if os.path.exists(output_path):
+                return True, f"Converti avec automation: {os.path.basename(vtf_path)}"
+            else:
+                return False, "Automation échouée - fichier non créé"
+                
+        except ImportError:
+            # pyautogui non disponible
+            process.terminate()
+            return False, "Automation impossible - installez pyautogui: pip install pyautogui"
+        except Exception as e:
+            process.terminate()
+            return False, f"Erreur automation: {e}"
+            
+    except Exception as e:
+        return False, f"Erreur lancement VTFEdit: {e}"
 
 # ------------------ Fonctions VMT/Dossier ------------------
 
@@ -533,7 +690,10 @@ class VMTPathRenamer(QWidget):
 
         action_group = QGroupBox("Actions")
 
-        action_layout = QHBoxLayout()
+        action_layout = QVBoxLayout()
+        
+        # Première ligne d'actions
+        action_layout1 = QHBoxLayout()
 
         self.run_vmt_btn = styled_button("🔄 Modifier chemins VMT")
 
@@ -543,18 +703,30 @@ class VMTPathRenamer(QWidget):
 
         self.reset_btn = styled_button("♻️ Reset")
 
-        self.apply_move_btn = styled_button("✅ Déplacer VMT/VTF")
-
         for btn, func in [(self.run_vmt_btn, self.run_vmt), (self.run_rename_btn, self.run_rename),
 
-                          (self.scan_btn, self.scan_vmt_dirs), (self.reset_btn, self.reset_fields),
-
-                          (self.apply_move_btn, self.apply_move_vmt_vtf)]:
+                          (self.scan_btn, self.scan_vmt_dirs), (self.reset_btn, self.reset_fields)]:
 
             btn.clicked.connect(func)
 
-            action_layout.addWidget(btn)
+            action_layout1.addWidget(btn)
+        
+        # Deuxième ligne d'actions
+        action_layout2 = QHBoxLayout()
 
+        self.apply_move_btn = styled_button("✅ Déplacer VMT/VTF")
+        
+        self.convert_vtf_btn = styled_button("🖼️ Convertir VTF")
+
+        for btn, func in [(self.apply_move_btn, self.apply_move_vmt_vtf),
+                          (self.convert_vtf_btn, self.convert_vtf_files)]:
+
+            btn.clicked.connect(func)
+
+            action_layout2.addWidget(btn)
+
+        action_layout.addLayout(action_layout1)
+        action_layout.addLayout(action_layout2)
         action_group.setLayout(action_layout)
 
         layout.addWidget(action_group)
@@ -803,6 +975,93 @@ class VMTPathRenamer(QWidget):
 
         self.log_widget.append("=== Déplacement VMT/VTF terminé ===")
 
+    def convert_vtf_files(self):
+        """Convertir des fichiers VTF en TGA avec VTFEdit"""
+        self.log_widget.append("=== Début conversion VTF vers TGA ===")
+        
+        # Sélectionner les fichiers VTF
+        vtf_files, _ = QFileDialog.getOpenFileNames(
+            self, 
+            "Sélectionner les fichiers VTF à convertir",
+            "",
+            "Fichiers VTF (*.vtf);;Tous les fichiers (*)"
+        )
+        
+        if not vtf_files:
+            self.log_widget.append("[ANNULÉ] Aucun fichier VTF sélectionné.")
+            return
+        
+        self.log_widget.append(f"[INFO] {len(vtf_files)} fichiers VTF sélectionnés")
+        
+        # Choisir le dossier de destination
+        output_dir = QFileDialog.getExistingDirectory(
+            self, 
+            "Choisir le dossier de destination pour les fichiers TGA"
+        )
+        
+        if not output_dir:
+            self.log_widget.append("[ANNULÉ] Aucun dossier de destination choisi.")
+            return
+        
+        self.log_widget.append(f"[INFO] Dossier de destination: {output_dir}")
+        self.log_widget.append("[INFO] Format: TGA (via VTFEdit)")
+        
+        # Convertir chaque fichier
+        success_count = 0
+        error_count = 0
+        
+        for vtf_file in vtf_files:
+            try:
+                # Générer le nom de fichier de sortie TGA
+                base_name = os.path.splitext(os.path.basename(vtf_file))[0]
+                output_file = os.path.join(output_dir, f"{base_name}.tga")
+                
+                self.log_widget.append(f"[CONVERSION] {os.path.basename(vtf_file)} -> {os.path.basename(output_file)}")
+                
+                # Effectuer la conversion avec VTFEdit
+                success, message = convert_vtf_to_tga_with_vtfedit(vtf_file, output_file)
+                
+                if success:
+                    self.log_widget.append(f"[✅ SUCCÈS] {message}")
+                    success_count += 1
+                else:
+                    self.log_widget.append(f"[❌ ERREUR] {message}")
+                    error_count += 1
+                    
+            except Exception as e:
+                self.log_widget.append(f"[❌ ERREUR] {os.path.basename(vtf_file)}: {e}")
+                error_count += 1
+        
+        # Résumé
+        self.log_widget.append("=" * 50)
+        self.log_widget.append(f"[RÉSUMÉ] Conversion VTF->TGA terminée:")
+        self.log_widget.append(f"  ✅ Succès: {success_count}")
+        self.log_widget.append(f"  ❌ Erreurs: {error_count}")
+        self.log_widget.append(f"  📁 Dossier: {output_dir}")
+        self.log_widget.append("=== Conversion VTF terminée ===")
+        
+        # Message de fin
+        if success_count > 0:
+            QMessageBox.information(
+                self, 
+                "Conversion terminée",
+                f"Conversion VTF->TGA réussie !\n\n"
+                f"✅ {success_count} fichiers convertis en TGA\n"
+                f"❌ {error_count} erreurs\n\n"
+                f"Fichiers TGA sauvés dans:\n{output_dir}\n\n"
+                f"Les fichiers VTF originaux sont conservés."
+            )
+        else:
+            QMessageBox.warning(
+                self, 
+                "Conversion échouée",
+                f"Aucun fichier n'a pu être converti.\n\n"
+                f"Vérifiez que vous avez:\n"
+                f"- VTFEdit installé ou dans le dossier\n"
+                f"- Ou pyautogui: pip install pyautogui\n\n"
+                f"Consultez le journal pour plus de détails."
+            )
+
 
 
     # ------------------ Mise à jour ------------------
@@ -826,10 +1085,11 @@ class VMTPathRenamer(QWidget):
             self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
             self.update_btn.setEnabled(False)
             self.log_widget.append(f"❌ Erreur de vérification: {error_msg}")
-            QMessageBox.warning(self, "Erreur mise à jour",
-                                f"Impossible de vérifier la mise à jour.\n"
-                                f"Détails: {error_msg}\n"
-                                "Consultez crash.txt pour plus d'informations.")
+            # Pas de popup pour les erreurs réseau - juste les logs
+            if not ("cache" in error_msg.lower() or "timeout" in error_msg.lower() or "connexion" in error_msg.lower()):
+                QMessageBox.warning(self, "Erreur mise à jour",
+                                    f"Impossible de vérifier la mise à jour.\n"
+                                    f"Détails: {error_msg}")
         elif up_to_date:
             self.update_label.setText(f"✅ Application à jour ({VERSION})")
             self.update_btn.setEnabled(False)
@@ -849,83 +1109,127 @@ class VMTPathRenamer(QWidget):
 
     def download_update(self):
         try:
+            global BEST_UPDATE_URL
+            
+            # Essayer plusieurs URLs de téléchargement
+            download_urls = []
+            if BEST_UPDATE_URL and BEST_UPDATE_URL != UPDATE_SCRIPT_URL:
+                download_urls.append(BEST_UPDATE_URL)
+            
+            # Ajouter les URLs alternatives
+            jsdelivr_script = UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/")
+            statically_script = UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/")
+            
+            download_urls.extend([
+                jsdelivr_script,
+                statically_script,
+                UPDATE_SCRIPT_URL
+            ])
+            
             self.log_widget.append("=" * 50)
             self.log_widget.append("🚀 DÉBUT DE LA MISE À JOUR")
             self.log_widget.append("=" * 50)
-            self.log_widget.append(f"[MAJ] URL de téléchargement: {UPDATE_SCRIPT_URL}")
             self.log_widget.append(f"[MAJ] Version actuelle: {VERSION}")
             
             # Désactiver le bouton pendant le téléchargement
             self.update_btn.setEnabled(False)
             self.update_btn.setText("⬇️ Téléchargement...")
             
-            r = requests.get(UPDATE_SCRIPT_URL, timeout=15)
-            r.raise_for_status()
+            # Essayer chaque URL jusqu'à ce qu'une fonctionne
+            script_content = None
+            successful_url = None
             
-            self.log_widget.append(f"[MAJ] Téléchargement réussi (taille: {len(r.text)} caractères)")
+            for url in download_urls:
+                try:
+                    self.log_widget.append(f"[MAJ] Tentative: {url}")
+                    r = requests.get(url, timeout=15)
+                    r.raise_for_status()
+                    
+                    if len(r.text) > 1000:  # Vérifier que c'est un vrai script
+                        script_content = r.text
+                        successful_url = url
+                        self.log_widget.append(f"[MAJ] ✅ Téléchargement réussi depuis: {url}")
+                        break
+                    else:
+                        self.log_widget.append(f"[MAJ] ⚠️ Fichier trop petit: {len(r.text)} caractères")
+                        
+                except Exception as e:
+                    self.log_widget.append(f"[MAJ] ❌ Échec: {e}")
+                    continue
+            
+            if not script_content:
+                raise Exception("Impossible de télécharger depuis aucune URL")
+            
+            self.log_widget.append(f"[MAJ] Téléchargement réussi (taille: {len(script_content)} caractères)")
+            self.log_widget.append(f"[MAJ] Source: {successful_url}")
             
             script_path = os.path.abspath(sys.argv[0])
             self.log_widget.append(f"[MAJ] Chemin du script: {script_path}")
             
-            # Créer une sauvegarde
-            backup_path = script_path + ".bak"
-            if os.path.exists(script_path):
-                try:
-                    shutil.copy2(script_path, backup_path)
-                    self.log_widget.append(f"[MAJ] ✅ Sauvegarde créée: {backup_path}")
-                except Exception as e:
-                    self.log_widget.append(f"[MAJ] ⚠️ Impossible de créer la sauvegarde: {e}")
+            # Vérifier les permissions d'écriture
+            script_dir = os.path.dirname(script_path)
+            if not os.access(script_dir, os.W_OK):
+                raise Exception(f"Pas de permission d'écriture dans: {script_dir}")
             
-            # Écrire le nouveau fichier
+            if os.path.exists(script_path) and not os.access(script_path, os.W_OK):
+                raise Exception(f"Pas de permission d'écriture sur: {script_path}")
+            
+            # Écrire le nouveau fichier directement (sans sauvegarde)
             with open(script_path, "w", encoding="utf-8") as f:
-                f.write(r.text)
+                f.write(script_content)
             
             self.log_widget.append("[MAJ] ✅ Nouveau script écrit avec succès")
             self.log_widget.append("[MAJ] 🔄 Redémarrage de l'application...")
             
             QMessageBox.information(self, "Mise à jour réussie",
                                     "✅ Nouvelle version installée avec succès !\n\n"
-                                    "L'application va redémarrer automatiquement.\n"
-                                    f"Sauvegarde disponible: {backup_path}")
+                                    "L'application va redémarrer automatiquement.")
             
             # Redémarrer l'application
             python = sys.executable
             os.execl(python, python, *sys.argv)
             
-        except requests.exceptions.Timeout:
-            error_msg = "Timeout lors du téléchargement de la mise à jour"
+        except PermissionError as e:
+            error_msg = f"Permission refusée: {e}\n\nEssayez de:\n1. Fermer l'antivirus temporairement\n2. Exécuter en tant qu'administrateur\n3. Déplacer l'application dans un autre dossier"
             self.log_widget.append(f"[MAJ] ❌ {error_msg}")
-            log_crash(error_msg)
+            QMessageBox.critical(self, "Erreur de permissions", error_msg)
+        except requests.exceptions.Timeout:
+            error_msg = "Timeout lors du téléchargement - Réessayez plus tard"
+            self.log_widget.append(f"[MAJ] ❌ {error_msg}")
             QMessageBox.warning(self, "Erreur de téléchargement", error_msg)
         except requests.exceptions.ConnectionError:
-            error_msg = "Erreur de connexion lors du téléchargement"
+            error_msg = "Pas de connexion internet - Vérifiez votre connexion"
             self.log_widget.append(f"[MAJ] ❌ {error_msg}")
-            log_crash(error_msg)
             QMessageBox.warning(self, "Erreur de connexion", error_msg)
         except Exception as e:
             error_msg = f"Erreur lors de la mise à jour: {e}"
             self.log_widget.append(f"[MAJ] ❌ {error_msg}")
-            log_crash(error_msg)
-            QMessageBox.warning(self, "Erreur de mise à jour", error_msg)
+            if "permission" in str(e).lower():
+                QMessageBox.critical(self, "Erreur de permissions", 
+                                   f"{error_msg}\n\nEssayez d'exécuter en tant qu'administrateur.")
+            else:
+                QMessageBox.warning(self, "Erreur de mise à jour", error_msg)
         finally:
             # Réactiver le bouton en cas d'erreur
             self.update_btn.setEnabled(True)
             self.update_btn.setText("⬇️ Télécharger mise à jour")
 
     def debug_github(self):
-        """Debug complet de la connexion GitHub"""
+        """Debug complet de la connexion GitHub avec test de cache"""
         self.log_widget.append("=" * 70)
-        self.log_widget.append("🐛 DEBUG GITHUB COMPLET")
+        self.log_widget.append("🐛 DEBUG GITHUB COMPLET + TEST CACHE")
         self.log_widget.append("=" * 70)
         
         try:
             import time
+            import random
             
             # Test 1: Connexion de base
             self.log_widget.append("📡 TEST 1: Connexion de base")
             headers = {
-                'Cache-Control': 'no-cache',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
+                'Expires': '0',
                 'User-Agent': 'VMT-Path-Renamer-Debug/1.0'
             }
             
@@ -964,6 +1268,31 @@ class VMTPathRenamer(QWidget):
             else:
                 self.log_widget.append(f"❌ Erreur HTTP: {r.status_code}")
                 self.log_widget.append(f"📄 Réponse: {r.text[:200]}...")
+            
+            # Test 2: URLs alternatives pour contourner le cache
+            self.log_widget.append("\n📡 TEST 2: URLs alternatives anti-cache")
+            
+            timestamp = int(time.time() * 1000000)
+            random_hash = random.randint(100000, 999999)
+            
+            alternative_urls = [
+                UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/"),
+                UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/"),
+                f"{UPDATE_CHECK_URL}?cache_bust={timestamp}&random={random_hash}",
+                f"{UPDATE_CHECK_URL}?t={timestamp}&force=1"
+            ]
+            
+            for i, url in enumerate(alternative_urls):
+                try:
+                    self.log_widget.append(f"\n🔄 Test URL {i+1}: {url}")
+                    r = requests.get(url, timeout=10, headers=headers)
+                    if r.status_code == 200:
+                        content = r.text.strip().replace('\ufeff', '').replace('\r', '').replace('\n', '')
+                        self.log_widget.append(f"✅ Succès: '{content}'")
+                    else:
+                        self.log_widget.append(f"❌ Erreur: {r.status_code}")
+                except Exception as e:
+                    self.log_widget.append(f"❌ Exception: {e}")
                 
         except Exception as e:
             self.log_widget.append(f"❌ Erreur générale: {e}")
@@ -1367,6 +1696,3 @@ if __name__ == "__main__":
         log_crash(str(e))
         print(f"Erreur au lancement : {e}")
         input("Appuyez sur Entrée pour quitter...")
-
-
-
