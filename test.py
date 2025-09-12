@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 # ------------------ VERSION ------------------
-VERSION = "10.0.0"  # version locale
+VERSION = "9.0.0"  # version locale
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
 UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
 
@@ -372,3 +372,4 @@ if __name__ == "__main__":
     window = VMTPathRenamer()
     window.show()
     sys.exit(app.exec_())
+
