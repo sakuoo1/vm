@@ -423,3 +423,4 @@ if __name__ == "__main__":
     window = VMTPathRenamer()
     window.show()
     sys.exit(app.exec_())
+
