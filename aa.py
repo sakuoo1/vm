@@ -679,9 +679,6 @@ class ChangelogDialog(QDialog):
 
 # VMT Path Renamer - Changelog
 
-## Version 18.0.0 - Dernière mise à jour
-
-• New interface
 
 
 ## Version 17.7.0 - Dernière mise à jour
@@ -2200,7 +2197,7 @@ def require_authentication():
 
 
 # ------------------ VERSION ------------------
-VERSION = "18.1.0"  # version locale
+VERSION = "18.0.0"  # version locale
 
 # ------------------ UPDATE CONFIGURATION ------------------
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
@@ -2288,22 +2285,27 @@ def check_update(silent=False):
         # Configuration optimisée des URLs
         timestamp = int(time.time())
         
-        # URLs prioritaires (CDN rapides en premier)
+        # URLs prioritaires (GitHub direct en premier pour éviter le cache des CDN)
         urls_config = [
             {
-                'url': UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/") + f"?t={timestamp}",
+                'url': UPDATE_CHECK_URL + f"?t={timestamp}&nocache=1&v={timestamp}",
                 'priority': 1,
+                'timeout': 8
+            },
+            {
+                'url': UPDATE_CHECK_URL + f"?timestamp={timestamp}&force=1",
+                'priority': 2,
+                'timeout': 8
+            },
+            {
+                'url': UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/") + f"?t={timestamp}",
+                'priority': 3,
                 'timeout': 5
             },
             {
                 'url': UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/") + f"?t={timestamp}",
-                'priority': 2, 
+                'priority': 4, 
                 'timeout': 5
-            },
-            {
-                'url': UPDATE_CHECK_URL + f"?t={timestamp}",
-                'priority': 3,
-                'timeout': 8
             }
         ]
         
@@ -14920,5 +14922,3 @@ if __name__ == "__main__":
 
 
         input("Appuyez sur Entrée pour quitter...")
-
-
