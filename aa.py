@@ -679,6 +679,9 @@ class ChangelogDialog(QDialog):
 
 # VMT Path Renamer - Changelog
 
+## Version 18.0.0 - Dernière mise à jour
+
+• New interface
 
 
 ## Version 17.7.0 - Dernière mise à jour
@@ -14917,3 +14920,4 @@ if __name__ == "__main__":
 
 
         input("Appuyez sur Entrée pour quitter...")
+
