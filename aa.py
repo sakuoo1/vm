@@ -2197,7 +2197,7 @@ def require_authentication():
 
 
 # ------------------ VERSION ------------------
-VERSION = "18.0.0"  # version locale
+VERSION = "18.2.0"  # version locale
 
 # ------------------ UPDATE CONFIGURATION ------------------
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
@@ -14922,3 +14922,4 @@ if __name__ == "__main__":
 
 
         input("Appuyez sur Entrée pour quitter...")
+
