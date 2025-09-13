@@ -681,7 +681,7 @@ class ChangelogDialog(QDialog):
 
 
 
-## Version 18.0.0 - Dernière mise à jour
+## Version 17.7.0 - Dernière mise à jour
 
 ✨ **Nouvelles fonctionnalités :**
 
@@ -2197,23 +2197,13 @@ def require_authentication():
 
 
 # ------------------ VERSION ------------------
+VERSION = "18.0.0"  # version locale
 
-
-
-VERSION = "17.8.0"  # version locale
-
-
-
+# ------------------ UPDATE CONFIGURATION ------------------
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/version.txt"
-
-
-
-UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/test.py"
-
-
+UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/sakuoo1/vm/main/aa.py"
 
 # Variable globale pour stocker la meilleure URL de téléchargement
-
 BEST_UPDATE_URL = UPDATE_SCRIPT_URL
 
 
@@ -4142,12 +4132,6 @@ class VMTPathRenamer(QWidget):
 
 
         self.update_timer.start(15 * 60 * 1000)  # 15 minutes en millisecondes
-        self.countdown_timer.timeout.connect(self.update_countdown_display)
-        self.countdown_timer.start(1000)  # 1 seconde
-        
-        # Initialiser le temps de prochaine vérification
-        import time
-        self.next_check_time = time.time() + (15 * 60)  # 15 minutes
     
     def auto_check_update(self):
         """Vérification automatique silencieuse des mises à jour"""
@@ -4165,90 +4149,10 @@ class VMTPathRenamer(QWidget):
                 self.update_btn.setEnabled(False)
             # En cas d'erreur, ne rien faire (vérification silencieuse)
             
-            # Réinitialiser le timer pour la prochaine vérification
-            import time
-            self.next_check_time = time.time() + (15 * 60)
-            
         except Exception as e:
             # Erreur silencieuse - ne pas déranger l'utilisateur
             print(f"[DEBUG] Erreur vérification automatique: {e}")
             pass
-
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-        # Timer pour affichage du countdown (toutes les secondes)
-
-
-
-
-
-
-
-        self.countdown_timer = QTimer()
-
-
-
-
-
-
-
-        self.countdown_timer.timeout.connect(self.update_countdown_display)
-
-
-
-
-
-
-
-        self.countdown_timer.start(1000)  # 1 seconde
-
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-        # Variables pour le countdown
-
-
-
-
-
-
-
-        self.next_check_time = time.time() + (15 * 60)  # 15 minutes à partir de maintenant
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -8191,203 +8095,41 @@ Voulez-vous procéder maintenant?
 
 
     def download_update(self):
-
-
-
-
-
-
-
+        """Télécharge et installe automatiquement la mise à jour"""
         try:
-
-
-
-
-
-
-
             global BEST_UPDATE_URL
-
-
-
-
-
-
-
             
-
-
-
-
-
-
-
-            # Essayer plusieurs URLs de téléchargement
-
-
-
-
-
-
-
-            download_urls = []
-
-
-
-
-
-
-
-            if BEST_UPDATE_URL and BEST_UPDATE_URL != UPDATE_SCRIPT_URL:
-
-
-
-
-
-
-
-                download_urls.append(BEST_UPDATE_URL)
-
-
-
-
-
-
-
+            # URLs de téléchargement multiples pour robustesse
+            download_urls = [
+                UPDATE_SCRIPT_URL,
+                UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/"),
+                UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/"),
+                UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "gitcdn.xyz/repo").replace("/main/", "/main/"),
+            ]
             
-
-
-
-
-
-
-
-            # Ajouter les URLs alternatives
-
-
-
-
-
-
-
-            jsdelivr_script = UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/")
-
-
-
-
-
-
-
-            statically_script = UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/")
-
-
-
-
-
-
-
+            if BEST_UPDATE_URL and BEST_UPDATE_URL not in download_urls:
+                download_urls.insert(0, BEST_UPDATE_URL)
             
-
-
-
-
-
-
-
-            download_urls.extend([
-
-
-
-
-
-
-
-                jsdelivr_script,
-
-
-
-
-
-
-
-                statically_script,
-
-
-
-
-
-
-
-                UPDATE_SCRIPT_URL
-
-
-
-
-
-
-
-            ])
-
-
-
-
-
-
-
+            self.log_widget.append("=" * 60)
             
-
-
-
-
-
-
-
-            self.log_widget.append("=" * 50)
-
-
-
-
-
-
-
-            self.log_widget.append("🚀 DÉBUT DE LA MISE À JOUR")
-
-
-
-
-
-
-
-            self.log_widget.append("=" * 50)
-
-
-
-
-
-
-
+            self.log_widget.append("🚀 TÉLÉCHARGEMENT DE LA MISE À JOUR")
+            self.log_widget.append("=" * 60)
             self.log_widget.append(f"[MAJ] Version actuelle: {VERSION}")
-
-
-
-
-
-
-
             
-
-
-
-
-
-
-
+            # Désactiver l'interface pendant le téléchargement
+            
+            
+            self.log_widget.append("=" * 50)
+            
+            self.log_widget.append("🚀 DÉBUT DE LA MISE À JOUR")
+            
+            self.log_widget.append("=" * 50)
+            
+            self.log_widget.append(f"[MAJ] Version actuelle: {VERSION}")
+            
             # Désactiver le bouton pendant le téléchargement
-
-
-
-
-
+            
+            
 
 
             self.update_btn.setEnabled(False)
