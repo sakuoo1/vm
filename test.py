@@ -267,16 +267,16 @@ class AuthDialog(QDialog):
         header_layout = QVBoxLayout()
         header_layout.setSpacing(15)
         
-        # Logo Netflix style
+        # Logo futuriste style
         logo_label = QLabel("🔐")
         logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setFont(QFont("Segoe UI", 32))
+        logo_label.setFont(QFont("Inter", 32))
         logo_label.setStyleSheet("""
             QLabel {
-                color: #e50914;
+                color: #00D4FF;
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop: 0 #2a2a2a, stop: 1 #1a1a1a);
-                border: 3px solid #e50914;
+                    stop: 0 #1E1E1E, stop: 1 #0A0A0A);
+                border: 3px solid #00D4FF;
                 border-radius: 35px;
                 padding: 15px;
                 margin-bottom: 10px;
@@ -285,29 +285,36 @@ class AuthDialog(QDialog):
         logo_label.setFixedSize(70, 70)
         header_layout.addWidget(logo_label, 0, Qt.AlignCenter)
         
-        # Titre Netflix
-        title = QLabel("VMT Path Renamer")
+        # Titre futuriste
+        title = QLabel("VMT PATH")
         title.setAlignment(Qt.AlignCenter)
-        title.setFont(QFont("Segoe UI", 24, QFont.Bold))
-        title.setStyleSheet("color: #e50914; margin: 0; font-weight: 700;")
+        title.setFont(QFont("Inter", 24, QFont.Bold))
+        title.setStyleSheet("color: #00D4FF; margin: 0; font-weight: 700;")
         header_layout.addWidget(title)
         
-        # Sous-titre Netflix
+        # Sous-titre RENAMER
+        subtitle_main = QLabel("RENAMER")
+        subtitle_main.setAlignment(Qt.AlignCenter)
+        subtitle_main.setFont(QFont("Inter", 16, QFont.Bold))
+        subtitle_main.setStyleSheet("color: #FFFFFF; margin: 0; font-weight: 600; letter-spacing: 2px;")
+        header_layout.addWidget(subtitle_main)
+        
+        # Sous-titre futuriste
         subtitle = QLabel("Authentification sécurisée")
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setFont(QFont("Segoe UI", 12))
-        subtitle.setStyleSheet("color: #b3b3b3; margin-bottom: 15px;")
+        subtitle.setFont(QFont("Inter", 12))
+        subtitle.setStyleSheet("color: #B0B0B0; margin-bottom: 15px; font-weight: 400;")
         header_layout.addWidget(subtitle)
         
         layout.addLayout(header_layout)
         
-        # Séparateur Netflix
+        # Séparateur futuriste
         separator = QLabel()
         separator.setFixedHeight(2)
         separator.setStyleSheet("""
             QLabel {
                 background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-                    stop: 0 transparent, stop: 0.3 #e50914, stop: 0.7 #e50914, stop: 1 transparent);
+                    stop: 0 transparent, stop: 0.3 #00D4FF, stop: 0.7 #00D4FF, stop: 1 transparent);
                 border-radius: 1px;
                 margin: 10px 40px;
             }
@@ -318,35 +325,36 @@ class AuthDialog(QDialog):
         input_section = QVBoxLayout()
         input_section.setSpacing(12)
         
-        # Label Netflix
-        key_label = QLabel("Cle d'acces")
-        key_label.setFont(QFont("Segoe UI", 13, QFont.Bold))
-        key_label.setStyleSheet("color: #ffffff; margin-bottom: 8px;")
+        # Label futuriste
+        key_label = QLabel("Clé d'Accès")
+        key_label.setFont(QFont("Inter", 13, QFont.Bold))
+        key_label.setStyleSheet("color: #FFFFFF; margin-bottom: 8px; font-weight: 600;")
         input_section.addWidget(key_label)
         
-        # Champ de saisie Netflix
+        # Champ de saisie futuriste
         self.key_input = QLineEdit()
         self.key_input.setEchoMode(QLineEdit.Password)
-        self.key_input.setPlaceholderText("Saisissez votre clé d'authentification...")
-        self.key_input.setFont(QFont("Segoe UI", 13))
+        self.key_input.setPlaceholderText("xxxx-xxxx-xxxx")
+        self.key_input.setFont(QFont("Inter", 13))
         self.key_input.setStyleSheet("""
             QLineEdit {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop: 0 #333333, stop: 1 #2a2a2a);
-                color: #ffffff;
-                border: 2px solid #555555;
-                border-radius: 10px;
+                    stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                color: #FFFFFF;
+                border: 2px solid #333333;
+                border-radius: 12px;
                 padding: 16px 20px;
                 font-size: 14px;
-                selection-background-color: #e50914;
+                font-weight: 400;
+                selection-background-color: #00D4FF;
             }
             QLineEdit:focus {
-                border-color: #e50914;
+                border-color: #00D4FF;
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop: 0 #404040, stop: 1 #333333);
+                    stop: 0 #2A2A2A, stop: 1 #333333);
             }
             QLineEdit:hover {
-                border-color: #777777;
+                border-color: #6C7B7F;
             }
         """)
         self.key_input.returnPressed.connect(self.authenticate)
@@ -354,125 +362,93 @@ class AuthDialog(QDialog):
         
         layout.addLayout(input_section)
         
-        # Barre de progression Netflix
+        # Barre de progression futuriste
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.progress_bar.setFixedHeight(8)
         self.progress_bar.setStyleSheet("""
             QProgressBar {
                 border: none;
-                border-radius: 4px;
+                border-radius: 6px;
                 background-color: #333333;
                 text-align: center;
+                color: #FFFFFF;
+                font-weight: 600;
             }
             QProgressBar::chunk {
                 background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-                    stop: 0 #e50914, stop: 1 #f40612);
-                border-radius: 4px;
+                    stop: 0 #00D4FF, stop: 1 #00FF88);
+                border-radius: 6px;
             }
         """)
         layout.addWidget(self.progress_bar)
         
-        # Message de statut Netflix
+        # Message de statut futuriste
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setFont(QFont("Segoe UI", 11))
-        self.status_label.setStyleSheet("color: #b3b3b3; margin: 10px 0;")
+        self.status_label.setFont(QFont("Inter", 11))
+        self.status_label.setStyleSheet("color: #B0B0B0; margin: 10px 0; font-weight: 400;")
         layout.addWidget(self.status_label)
         
         # Boutons Netflix
         button_layout = QHBoxLayout()
         button_layout.setSpacing(15)
         
-        # Bouton Quitter (secondaire)
+        # Bouton Quitter (secondaire futuriste)
         self.quit_button = QPushButton("Quitter")
-        self.quit_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        self.quit_button.setFont(QFont("Inter", 12, QFont.Bold))
         self.quit_button.clicked.connect(self.reject)
         self.quit_button.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop: 0 #555555, stop: 1 #444444);
-                color: #ffffff;
-                font-weight: bold;
-                border: 2px solid #666666;
-                border-radius: 8px;
-                padding: 12px 25px;
-                font-size: 12px;
-                min-width: 100px;
+                    stop: 0 #6C7B7F, stop: 1 #555555);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 14px 24px;
+                font-size: 13px;
+                min-width: 120px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop: 0 #666666, stop: 1 #555555);
-                border-color: #777777;
+                    stop: 0 #7A8A8F, stop: 1 #666666);
             }
             QPushButton:pressed {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop: 0 #444444, stop: 1 #333333);
+                    stop: 0 #555555, stop: 1 #444444);
             }
         """)
         
-        # Bouton Se connecter (principal Netflix)
-
-        self.auth_button = QPushButton("🔓 Se connecter")
-
-        self.auth_button.setFont(QFont("Segoe UI", 12, QFont.Bold))
-
+        # Bouton Se connecter (principal futuriste)
+        self.auth_button = QPushButton("🔓 CONNEXION")
+        self.auth_button.setFont(QFont("Inter", 12, QFont.Bold))
         self.auth_button.clicked.connect(self.authenticate)
-
         self.auth_button.setStyleSheet("""
-
             QPushButton {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #e50914, stop: 1 #b8070f);
-
-                color: white;
-
-                font-weight: bold;
-
-                border: 2px solid #e50914;
-
-                border-radius: 8px;
-
-                padding: 12px 25px;
-
-                font-size: 12px;
-
+                    stop: 0 #00D4FF, stop: 1 #0099CC);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 14px 24px;
+                font-size: 13px;
                 min-width: 120px;
-
             }
-
             QPushButton:hover {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #f40612, stop: 1 #e50914);
-
-                border-color: #f40612;
-
+                    stop: 0 #1AE5FF, stop: 1 #00B8E6);
             }
-
             QPushButton:pressed {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #b8070f, stop: 1 #8a0509);
-
+                    stop: 0 #0099CC, stop: 1 #007399);
             }
-
             QPushButton:disabled {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #444444, stop: 1 #333333);
-
-                color: #888888;
-
-                border-color: #555555;
-
+                    stop: 0 #333333, stop: 1 #2A2A2A);
+                color: #707070;
             }
-
         """)
 
         
@@ -489,22 +465,14 @@ class AuthDialog(QDialog):
 
         
 
-        # Style général Netflix
-
+        # Style général futuriste
         self.setStyleSheet("""
-
             QDialog {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #141414, stop: 1 #0a0a0a);
-
-                color: #ffffff;
-
-                font-family: 'Segoe UI', Arial, sans-serif;
-
+                    stop: 0 #0A0A0A, stop: 1 #1A1A1A);
+                color: #FFFFFF;
+                font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
             }
-
         """)
 
         
@@ -577,7 +545,7 @@ class AuthDialog(QDialog):
 
             self.status_label.setText(f"✅ {message}")
 
-            self.status_label.setStyleSheet("color: #28a745; font-size: 11px; margin: 10px 0;")
+            self.status_label.setStyleSheet("color: #00FF88; font-size: 11px; margin: 10px 0; font-weight: 500;")
 
             self.authenticated = True
 
@@ -607,7 +575,7 @@ class AuthDialog(QDialog):
 
         self.status_label.setText(message)
 
-        self.status_label.setStyleSheet("color: #ff6b6b; font-size: 11px; margin: 10px 0;")
+        self.status_label.setStyleSheet("color: #FF4757; font-size: 11px; margin: 10px 0; font-weight: 500;")
 
     
 
@@ -675,34 +643,20 @@ class ChangelogDialog(QDialog):
 
         
 
-        # Titre avec style moderne
-
+        # Titre avec style futuriste
         title = QLabel("📋 Changelog - Historique des Versions")
-
         title.setAlignment(Qt.AlignCenter)
-
-        title.setFont(QFont("Segoe UI", 18, QFont.Bold))
-
+        title.setFont(QFont("Inter", 18, QFont.Bold))
         title.setStyleSheet("""
-
             QLabel {
-
-                color: #e50914;
-
+                color: #00D4FF;
                 margin-bottom: 20px;
-
                 padding: 15px;
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #2a2a2a, stop: 1 #1a1a1a);
-
-                border: 2px solid #e50914;
-
-                border-radius: 10px;
-
+                    stop: 0 #1E1E1E, stop: 1 #0A0A0A);
+                border: 2px solid #00D4FF;
+                border-radius: 12px;
             }
-
         """)
 
         layout.addWidget(title)
@@ -725,7 +679,9 @@ class ChangelogDialog(QDialog):
 
 # VMT Path Renamer - Changelog
 
+## Version 18.0.0 - Dernière mise à jour
 
+•  New interface plus bg
 
 ## Version 17.7.0 - Dernière mise à jour
 
@@ -766,120 +722,63 @@ class ChangelogDialog(QDialog):
 
         self.changelog_text.setPlainText(changelog_content.strip())
 
-        
-
-        # Style moderne pour la zone de texte
-
+        # Style futuriste pour la zone de texte
         self.changelog_text.setStyleSheet("""
-
             QTextEdit {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #2a2a2a, stop: 1 #1e1e1e);
-
-                color: #ffffff;
-
-                border: 2px solid #444444;
-
+                    stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                color: #FFFFFF;
+                border: 2px solid #333333;
                 border-radius: 12px;
-
                 padding: 20px;
-
-                font-family: 'Consolas', 'Courier New', monospace;
-
+                font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
                 font-size: 11px;
-
                 line-height: 1.4;
-
-                selection-background-color: #e50914;
-
+                selection-background-color: #00D4FF;
             }
-
             QScrollBar:vertical {
-
                 background: #333333;
-
                 width: 12px;
-
                 border-radius: 6px;
-
             }
-
             QScrollBar::handle:vertical {
-
-                background: #e50914;
-
+                background: #00D4FF;
                 border-radius: 6px;
-
                 min-height: 20px;
-
             }
-
             QScrollBar::handle:vertical:hover {
-
-                background: #f40612;
-
+                background: #00E5FF;
             }
-
         """)
-
-        
 
         layout.addWidget(self.changelog_text)
 
         
 
-        # Bouton fermer avec style Netflix
-
+        # Bouton fermer avec style futuriste
         close_btn = QPushButton("❌ Fermer")
-
         close_btn.clicked.connect(self.accept)
-
-        close_btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
-
+        close_btn.setFont(QFont("Inter", 12, QFont.Bold))
         close_btn.setStyleSheet("""
-
             QPushButton {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #e50914, stop: 1 #b8070f);
-
-                color: white;
-
-                font-weight: bold;
-
-                border: 2px solid #e50914;
-
-                border-radius: 8px;
-
-                padding: 12px 30px;
-
-                font-size: 12px;
-
+                    stop: 0 #FF4757, stop: 1 #CC3A47);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 14px 24px;
+                font-size: 13px;
                 min-width: 120px;
-
             }
-
             QPushButton:hover {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #f40612, stop: 1 #e50914);
-
-                border-color: #f40612;
-
+                    stop: 0 #FF5A6B, stop: 1 #E6434F);
             }
-
             QPushButton:pressed {
-
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-
-                    stop: 0 #b8070f, stop: 1 #8a0509);
-
+                    stop: 0 #CC3A47, stop: 1 #B32D3A);
             }
-
         """)
 
         
@@ -897,13 +796,13 @@ class ChangelogDialog(QDialog):
         layout.addLayout(button_layout)
         self.setLayout(layout)
         
-        # Style général de la fenêtre
+        # Style général futuriste de la fenêtre
         self.setStyleSheet("""
             QDialog {
                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop: 0 #141414, stop: 1 #0a0a0a);
-                color: #ffffff;
-                font-family: 'Segoe UI', Arial, sans-serif;
+                    stop: 0 #0A0A0A, stop: 1 #1A1A1A);
+                color: #FFFFFF;
+                font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
             }
         """)
 
@@ -930,11 +829,11 @@ class AdminPanel(QDialog):
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
         
-        # Titre
+        # Titre futuriste
         title = QLabel("🔧 Gestion des Clés d'Accès")
         title.setAlignment(Qt.AlignCenter)
-        title.setFont(QFont("Arial", 16, QFont.Bold))
-        title.setStyleSheet("color: #FF3333; margin-bottom: 15px;")
+        title.setFont(QFont("Inter", 16, QFont.Bold))
+        title.setStyleSheet("color: #00D4FF; margin-bottom: 15px; font-weight: 700;")
         layout.addWidget(title)
         
         # Section création de clé
@@ -1005,25 +904,25 @@ class AdminPanel(QDialog):
         self.create_btn.clicked.connect(self.create_key)
 
         self.create_btn.setStyleSheet("""
-
             QPushButton {
-
-                background-color: #006600;
-
-                color: white;
-
-                font-weight: bold;
-
-                padding: 10px;
-
-                border-radius: 5px;
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00FF88, stop: 1 #00CC6A);
+                color: #000000;
+                font-weight: 600;
                 border: none;
-
+                border-radius: 12px;
+                padding: 14px 24px;
+                font-size: 13px;
+                min-width: 120px;
             }
-
-            QPushButton:hover { background-color: #008800; }
-
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AFF99, stop: 1 #00E675);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00CC6A, stop: 1 #00B35C);
+            }
         """)
 
         create_layout.addWidget(self.create_btn)
@@ -1075,25 +974,25 @@ class AdminPanel(QDialog):
         self.refresh_btn.clicked.connect(self.load_keys)
 
         self.refresh_btn.setStyleSheet("""
-
             QPushButton {
-
-                background-color: #0066CC;
-
-                color: white;
-
-                font-weight: bold;
-
-                padding: 8px 16px;
-
-                border-radius: 4px;
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00D4FF, stop: 1 #0099CC);
+                color: #000000;
+                font-weight: 600;
                 border: none;
-
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 12px;
+                min-width: 100px;
             }
-
-            QPushButton:hover { background-color: #0088FF; }
-
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AE5FF, stop: 1 #00B8E6);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0099CC, stop: 1 #007399);
+            }
         """)
 
         
@@ -1103,14 +1002,24 @@ class AdminPanel(QDialog):
         self.connected_keys_btn.clicked.connect(self.show_connected_keys)
         self.connected_keys_btn.setStyleSheet("""
             QPushButton {
-                background-color: #9933CC;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                border-radius: 4px;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #9933CC, stop: 1 #7A29A3);
+                color: #FFFFFF;
+                font-weight: 600;
                 border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 12px;
+                min-width: 120px;
             }
-            QPushButton:hover { background-color: #BB44FF; }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #BB44FF, stop: 1 #9933CC);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #7A29A3, stop: 1 #5C1F7A);
+            }
         """)
         
         # Bouton pour forcer la revalidation globale
@@ -1118,14 +1027,24 @@ class AdminPanel(QDialog):
         self.force_revalidation_btn.clicked.connect(self.force_global_revalidation)
         self.force_revalidation_btn.setStyleSheet("""
             QPushButton {
-                background-color: #FF6600;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                border-radius: 4px;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF6600, stop: 1 #CC5200);
+                color: #FFFFFF;
+                font-weight: 600;
                 border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 12px;
+                min-width: 140px;
             }
-            QPushButton:hover { background-color: #FF8800; }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF8800, stop: 1 #E65C00);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #CC5200, stop: 1 #994000);
+            }
         """)
         
         # Indicateur de mise à jour automatique
@@ -1148,222 +1067,137 @@ class AdminPanel(QDialog):
 
         
 
-        # Bouton fermer
-
+        # Bouton fermer futuriste
         close_btn = QPushButton("❌ Fermer")
-
         close_btn.clicked.connect(self.accept)
-
         close_btn.setStyleSheet("""
-
             QPushButton {
-
-                background-color: #666;
-
-                color: white;
-
-                font-weight: bold;
-
-                padding: 10px;
-
-                border-radius: 5px;
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #666666, stop: 1 #4D4D4D);
+                color: #FFFFFF;
+                font-weight: 600;
                 border: none;
-
+                border-radius: 12px;
+                padding: 14px 24px;
+                font-size: 13px;
+                min-width: 120px;
             }
-
-            QPushButton:hover { background-color: #888; }
-
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #888888, stop: 1 #666666);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #4D4D4D, stop: 1 #333333);
+            }
         """)
 
         layout.addWidget(close_btn)
-
         
-
+        # Appliquer le layout et le style général
         self.setLayout(layout)
-
         
-
-        # Style général
-
+        # Style général futuriste de la fenêtre
         self.setStyleSheet("""
-
             QDialog {
-
-                background-color: #111;
-
-                color: #FFF;
-
-                font-family: 'Segoe UI';
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0A0A0A, stop: 1 #1A1A1A);
+                color: #FFFFFF;
+                font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
             }
-
             QGroupBox {
-
-                font-weight: bold;
-
-                border: 2px solid #444;
-
-                border-radius: 5px;
-
+                font-weight: 600;
+                font-size: 14px;
+                color: #00D4FF;
+                border: 2px solid #333333;
+                border-radius: 12px;
                 margin-top: 10px;
-
                 padding-top: 10px;
-
             }
-
             QGroupBox::title {
-
                 subcontrol-origin: margin;
-
-                left: 10px;
-
-                padding: 0 5px 0 5px;
-
+                left: 15px;
+                padding: 0 8px 0 8px;
+                color: #00D4FF;
+                background: #1A1A1A;
             }
-
             QLineEdit, QComboBox {
-
-                background-color: #222;
-
-                color: #FFF;
-
-                border: 1px solid #444;
-
-                border-radius: 3px;
-
-                padding: 5px;
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                color: #FFFFFF;
+                border: 2px solid #333333;
+                border-radius: 12px;
+                padding: 12px 16px;
+                font-size: 13px;
             }
-
-            QTextEdit {
-
-                background-color: #222;
-
-                color: #FFF;
-
-                border: 1px solid #444;
-
-                border-radius: 3px;
-
+            QLineEdit:focus, QComboBox:focus {
+                border: 2px solid #00D4FF;
             }
-
+            QLabel {
+                color: #CCCCCC;
+                font-size: 12px;
+                margin: 5px 0px;
+            }
         """)
-
-    
 
     def create_key(self):
 
         key = self.new_key_input.text().strip()
-
         desc = self.new_desc_input.text().strip()
-
         role = self.role_combo.currentText()
-
         expiry_days = self.expiry_input.text().strip()
-
         
-
         if not key:
-
             QMessageBox.warning(self, "Erreur", "Veuillez entrer une clé")
-
             return
-
         
-
         if len(key) < 4:
-
             QMessageBox.warning(self, "Erreur", "La clé doit contenir au moins 4 caractères")
-
             return
-
         
-
         try:
-
             headers = {
-
                 'apikey': self.supabase_key,
-
                 'Authorization': f'Bearer {self.supabase_key}',
-
                 'Content-Type': 'application/json'
-
             }
-
             
-
             # Préparer les paramètres avec valeurs par défaut explicites
-
             params = {
-
                 'p_key': key,
-
                 'p_description': desc or f'Clé {role}',
-
                 'p_expires_at': None,
 
                 'p_max_usage': None,
-
                 'p_role': role
-
             }
-
             
-
             # Ajouter expiration si spécifiée
-
             if expiry_days:
-
                 try:
-
                     days = int(expiry_days)
-
                     from datetime import datetime, timedelta
-
                     expiry_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-
                     params['p_expires_at'] = expiry_date
-
                 except ValueError:
-
                     QMessageBox.warning(self, "Erreur", "Nombre de jours invalide")
-
                     return
-
             
-
             # Appeler la fonction Supabase
-
             url = f"{self.supabase_url}/rest/v1/rpc/create_access_key_with_role"
-
             response = requests.post(url, json=params, headers=headers, timeout=10)
-
             
-
             if response.status_code == 200:
-
                 QMessageBox.information(self, "Succès", f"Clé '{key}' créée avec succès!")
-
                 self.new_key_input.clear()
-
                 self.new_desc_input.clear()
-
                 self.expiry_input.clear()
-
                 self.load_keys()
-
             else:
-
                 error_msg = f"Erreur {response.status_code}: {response.text}"
-
                 QMessageBox.critical(self, "Erreur", error_msg)
-
                 
-
         except Exception as e:
-
             QMessageBox.critical(self, "Erreur", f"Erreur: {str(e)}")
 
     
@@ -1993,11 +1827,13 @@ Limite d'utilisation: {key_data.get('max_usage', 'Illimitée') if key_data.get('
                 text_widget.setFont(QFont("Consolas", 10))
                 text_widget.setStyleSheet("""
                     QTextEdit {
-                        background-color: #222;
-                        color: #FFF;
-                        border: 1px solid #444;
-                        border-radius: 5px;
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                            stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                        color: #FFFFFF;
+                        border: 2px solid #333333;
+                        border-radius: 12px;
                         padding: 10px;
+                        font-family: 'Consolas', 'Courier New', monospace;
                     }
                 """)
                 layout.addWidget(text_widget)
@@ -2009,28 +1845,40 @@ Limite d'utilisation: {key_data.get('max_usage', 'Illimitée') if key_data.get('
                 refresh_btn.clicked.connect(lambda: self.refresh_connected_keys_dialog(dialog, text_widget))
                 refresh_btn.setStyleSheet("""
                     QPushButton {
-                        background-color: #0066CC;
-                        color: white;
-                        font-weight: bold;
-                        padding: 10px;
-                        border-radius: 5px;
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                            stop: 0 #00D4FF, stop: 1 #0099CC);
+                        color: #000000;
+                        font-weight: 600;
                         border: none;
+                        border-radius: 12px;
+                        padding: 12px 20px;
+                        font-size: 13px;
+                        min-width: 120px;
                     }
-                    QPushButton:hover { background-color: #0088FF; }
+                    QPushButton:hover {
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                            stop: 0 #1AE5FF, stop: 1 #00B8E6);
+                    }
                 """)
                 
                 close_btn = QPushButton("❌ Fermer")
                 close_btn.clicked.connect(dialog.accept)
                 close_btn.setStyleSheet("""
                     QPushButton {
-                        background-color: #666;
-                        color: white;
-                        font-weight: bold;
-                        padding: 10px;
-                        border-radius: 5px;
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                            stop: 0 #666666, stop: 1 #4D4D4D);
+                        color: #FFFFFF;
+                        font-weight: 600;
                         border: none;
+                        border-radius: 12px;
+                        padding: 12px 20px;
+                        font-size: 13px;
+                        min-width: 120px;
                     }
-                    QPushButton:hover { background-color: #888; }
+                    QPushButton:hover {
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                            stop: 0 #888888, stop: 1 #666666);
+                    }
                 """)
                 
                 buttons_layout.addWidget(refresh_btn)
@@ -2040,9 +1888,10 @@ Limite d'utilisation: {key_data.get('max_usage', 'Illimitée') if key_data.get('
                 dialog.setLayout(layout)
                 dialog.setStyleSheet("""
                     QDialog {
-                        background-color: #111;
-                        color: #FFF;
-                        font-family: 'Segoe UI';
+                        background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                            stop: 0 #0A0A0A, stop: 1 #1A1A1A);
+                        color: #FFFFFF;
+                        font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
                     }
                 """)
                 dialog.exec_()
@@ -2353,7 +2202,7 @@ def require_authentication():
 
 
 
-VERSION = "17.8.0"  # version locale
+VERSION = "18.0.0"  # version locale
 
 
 
@@ -4706,6 +4555,56 @@ class VMTPathRenamer(QWidget):
 
 
         self.setWindowTitle("SAK VMT RENAME ETC ")
+        
+        # Style futuriste pour la fenêtre principale
+        self.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0A0A0A, stop: 1 #1A1A1A);
+                color: #FFFFFF;
+                font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+            }
+            QLabel {
+                color: #FFFFFF;
+                font-weight: 500;
+            }
+            QLineEdit {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                color: #FFFFFF;
+                border: 2px solid #333333;
+                border-radius: 12px;
+                padding: 12px 16px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #00D4FF;
+            }
+            QTextEdit {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                color: #FFFFFF;
+                border: 2px solid #333333;
+                border-radius: 12px;
+                padding: 8px;
+            }
+            QGroupBox {
+                font-weight: 600;
+                font-size: 14px;
+                color: #00D4FF;
+                border: 2px solid #333333;
+                border-radius: 12px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px 0 8px;
+                color: #00D4FF;
+                background: #1A1A1A;
+            }
+        """)
 
 
 
@@ -4922,6 +4821,7 @@ class VMTPathRenamer(QWidget):
 
 
         self.update_label = QLabel("🔄 Vérification mise à jour...")
+        self.update_label.setStyleSheet("color: #00D4FF; font-weight: 600; font-size: 14px;")
 
 
 
@@ -4930,6 +4830,27 @@ class VMTPathRenamer(QWidget):
 
 
         self.check_update_btn = QPushButton("🔄 Vérifier")
+        self.check_update_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00D4FF, stop: 1 #0099CC);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AE5FF, stop: 1 #00B8E6);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0099CC, stop: 1 #007399);
+            }
+        """)
 
 
 
@@ -4946,6 +4867,27 @@ class VMTPathRenamer(QWidget):
 
 
         self.debug_btn = QPushButton("🐛 Debug GitHub")
+        self.debug_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #9933CC, stop: 1 #7A29A3);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #BB44FF, stop: 1 #9933CC);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #7A29A3, stop: 1 #5C1F7A);
+            }
+        """)
 
 
 
@@ -4962,6 +4904,27 @@ class VMTPathRenamer(QWidget):
 
 
         self.test_local_btn = QPushButton("🧪 Test Local")
+        self.test_local_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF6600, stop: 1 #CC5200);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF8800, stop: 1 #E65C00);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #CC5200, stop: 1 #994000);
+            }
+        """)
 
 
 
@@ -4978,6 +4941,27 @@ class VMTPathRenamer(QWidget):
 
 
         self.force_check_btn = QPushButton("⚡ Force Check")
+        self.force_check_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FFFF00, stop: 1 #CCCC00);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FFFF33, stop: 1 #E6E600);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #CCCC00, stop: 1 #999900);
+            }
+        """)
 
 
 
@@ -4994,6 +4978,27 @@ class VMTPathRenamer(QWidget):
 
 
         self.ultra_check_btn = QPushButton("🚀 Ultra Check")
+        self.ultra_check_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00FF88, stop: 1 #00CC6A);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AFF99, stop: 1 #00E675);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00CC6A, stop: 1 #00B35C);
+            }
+        """)
 
 
 
@@ -5010,6 +5015,27 @@ class VMTPathRenamer(QWidget):
 
 
         self.connection_test_btn = QPushButton("🌐 Test Connexion")
+        self.connection_test_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00CCFF, stop: 1 #0099CC);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #33D6FF, stop: 1 #00B8E6);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0099CC, stop: 1 #007399);
+            }
+        """)
 
 
 
@@ -5026,6 +5052,32 @@ class VMTPathRenamer(QWidget):
 
 
         self.update_btn = QPushButton("⬇️ Télécharger mise à jour")
+        self.update_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF4757, stop: 1 #CC3A47);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF5A6B, stop: 1 #E6434F);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #CC3A47, stop: 1 #B32D3A);
+            }
+            QPushButton:disabled {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #333333, stop: 1 #2A2A2A);
+                color: #707070;
+            }
+        """)
 
 
 
@@ -5225,7 +5277,15 @@ class VMTPathRenamer(QWidget):
 
 
 
-                    background-color: #990000;
+            background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                stop: 0 #00D4FF, stop: 1 #0099CC);
+            color: #000000;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 20px;
+            font-size: 13px;
+            min-width: 120px;
 
 
 
@@ -5241,9 +5301,9 @@ class VMTPathRenamer(QWidget):
 
 
 
-                    color: #FFF;
 
 
+        }
 
 
 
@@ -5257,9 +5317,9 @@ class VMTPathRenamer(QWidget):
 
 
 
-                    font-weight: bold;
 
 
+        QPushButton:hover {
 
 
 
@@ -5273,9 +5333,9 @@ class VMTPathRenamer(QWidget):
 
 
 
-                    border-radius: 12px;
 
 
+            background-color: #FF3333;
 
 
 
@@ -5289,87 +5349,9 @@ class VMTPathRenamer(QWidget):
 
 
 
-                    padding: 12px 20px;
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-                    font-size: 16px;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                QPushButton:hover {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                    background-color: #FF3333;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                }
+        }
 
 
 
@@ -5386,21 +5368,6 @@ class VMTPathRenamer(QWidget):
 
 
             """)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             return btn
 
 
@@ -5513,7 +5480,28 @@ class VMTPathRenamer(QWidget):
 
 
 
-        browse_btn = styled_button("📁 Parcourir")
+        browse_btn = QPushButton("📁 Parcourir")
+        browse_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00D4FF, stop: 1 #0099CC);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AE5FF, stop: 1 #00B8E6);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0099CC, stop: 1 #007399);
+            }
+        """)
 
 
 
@@ -5985,7 +5973,28 @@ class VMTPathRenamer(QWidget):
 
 
 
-        self.run_vmt_btn = styled_button("🔄 Modifier chemins VMT")
+        self.run_vmt_btn = QPushButton("🔄 Modifier chemins VMT")
+        self.run_vmt_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00D4FF, stop: 1 #0099CC);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 160px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AE5FF, stop: 1 #00B8E6);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0099CC, stop: 1 #007399);
+            }
+        """)
 
 
 
@@ -6001,7 +6010,28 @@ class VMTPathRenamer(QWidget):
 
 
 
-        self.run_rename_btn = styled_button("📦 Renommer dossiers")
+        self.run_rename_btn = QPushButton("📦 Renommer dossiers")
+        self.run_rename_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #9933CC, stop: 1 #7A29A3);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 160px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #BB44FF, stop: 1 #9933CC);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #7A29A3, stop: 1 #5C1F7A);
+            }
+        """)
 
 
 
@@ -6017,7 +6047,28 @@ class VMTPathRenamer(QWidget):
 
 
 
-        self.scan_btn = styled_button("🔍 Scanner dossiers")
+        self.scan_btn = QPushButton("🔍 Scanner dossiers")
+        self.scan_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00FF88, stop: 1 #00CC6A);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 160px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AFF99, stop: 1 #00E675);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00CC6A, stop: 1 #00B35C);
+            }
+        """)
 
 
 
@@ -6033,7 +6084,28 @@ class VMTPathRenamer(QWidget):
 
 
 
-        self.reset_btn = styled_button("♻️ Reset")
+        self.reset_btn = QPushButton("♻️ Reset")
+        self.reset_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF6600, stop: 1 #CC5200);
+                color: #FFFFFF;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 160px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #FF8800, stop: 1 #E65C00);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #CC5200, stop: 1 #994000);
+            }
+        """)
 
 
 
@@ -6137,7 +6209,28 @@ class VMTPathRenamer(QWidget):
 
 
 
-        self.apply_move_btn = styled_button("✅ Déplacer VMT/VTF")
+        self.apply_move_btn = QPushButton("✅ Déplacer VMT/VTF")
+        self.apply_move_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00FF88, stop: 1 #00CC6A);
+                color: #000000;
+                font-weight: 600;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 20px;
+                font-size: 13px;
+                min-width: 160px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AFF99, stop: 1 #00E675);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00CC6A, stop: 1 #00B35C);
+            }
+        """)
 
 
 
@@ -6353,6 +6446,18 @@ class VMTPathRenamer(QWidget):
 
 
         self.log_widget = QTextEdit()
+        self.log_widget.setStyleSheet("""
+            QTextEdit {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                color: #FFFFFF;
+                border: 2px solid #333333;
+                border-radius: 12px;
+                padding: 8px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 11px;
+            }
+        """)
 
 
 
@@ -6417,6 +6522,18 @@ class VMTPathRenamer(QWidget):
 
 
         self.detected_dirs_widget = QTextEdit()
+        self.detected_dirs_widget.setStyleSheet("""
+            QTextEdit {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1E1E1E, stop: 1 #2A2A2A);
+                color: #FFFFFF;
+                border: 2px solid #333333;
+                border-radius: 12px;
+                padding: 8px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 11px;
+            }
+        """)
 
 
 
