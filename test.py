@@ -679,11 +679,9 @@ class ChangelogDialog(QDialog):
 
 # VMT Path Renamer - Changelog
 
+
+
 ## Version 18.0.0 - Dernière mise à jour
-
-•  New interface plus bg
-
-## Version 17.7.0 - Dernière mise à jour
 
 ✨ **Nouvelles fonctionnalités :**
 
@@ -2202,7 +2200,7 @@ def require_authentication():
 
 
 
-VERSION = "18.0.0"  # version locale
+VERSION = "17.8.0"  # version locale
 
 
 
@@ -2285,856 +2283,310 @@ def log_crash(error_text):
 
 
 def check_update(silent=False):
-
-    """Vérifie la version sur GitHub avec contournement ultra-robuste du cache"""
-
+    """Vérifie la version sur GitHub de manière optimisée et efficace"""
+    
     try:
-
         import time
-
-        import random
-
-        if not silent:
-
-            print(f"[DEBUG] Vérification de la mise à jour...")
-
-            print(f"[DEBUG] URL: {UPDATE_CHECK_URL}")
-
-            print(f"[DEBUG] Version locale: {VERSION}")
-
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         
-
-        # Méthodes ultra-multiples pour contourner le cache GitHub
-
+        if not silent:
+            print(f"[INFO] Vérification de mise à jour - Version locale: {VERSION}")
+        
+        # Configuration optimisée des URLs
         timestamp = int(time.time())
-
-        microseconds = int(time.time() * 1000000)
-
-        random_hash = random.randint(100000, 999999)
-
         
-
-        # URLs multiples pour éviter le cache GitHub
-
-        jsdelivr_url = UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/")
-
-        statically_url = UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/")
-
-        
-
-        urls_to_try = [
-
-            # CDN alternatifs UNIQUEMENT (ignorer GitHub complètement)
-
-            f"{jsdelivr_url}?t={microseconds}",
-
-            f"{statically_url}?t={microseconds}",
-
-            jsdelivr_url,
-
-            statically_url,
-
-            # Autres CDN de secours
-
-            UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "gitcdn.xyz/repo").replace("/main/", "/main/"),
-
-            UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "raw.githubusercontents.com")
-
-        ]
-
-        
-
-
-
-        # Headers ultra-agressifs
-
-
-
-        headers_variants = [
-
-
-
+        # URLs prioritaires (CDN rapides en premier)
+        urls_config = [
             {
-
-
-
-                'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-
-
-
-                'Pragma': 'no-cache',
-
-
-
-                'Expires': '0',
-
-
-
-                'User-Agent': f'VMT-Path-Renamer/{VERSION}',
-
-
-
-                'Accept': 'text/plain, */*',
-
-
-
-                'Accept-Encoding': 'gzip, deflate',
-
-
-
-                'Connection': 'close'
-
-
-
+                'url': UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/") + f"?t={timestamp}",
+                'priority': 1,
+                'timeout': 5
             },
-
-
-
             {
-
-
-
-                'Cache-Control': 'no-cache',
-
-
-
-                'Pragma': 'no-cache',
-
-
-
-                'User-Agent': f'Mozilla/5.0 VMT-Path-Renamer/{VERSION}',
-
-
-
-                'Accept': '*/*',
-
-
-
-                'Connection': 'keep-alive'
-
-
-
+                'url': UPDATE_CHECK_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/") + f"?t={timestamp}",
+                'priority': 2, 
+                'timeout': 5
             },
-
-
-
             {
-
-
-
-                'Cache-Control': 'no-store',
-
-
-
-                'User-Agent': f'VMT-Path-Renamer-ForceCheck/{VERSION}',
-
-
-
-                'Accept': 'text/plain',
-
-
-
-                'Connection': 'close'
-
-
-
+                'url': UPDATE_CHECK_URL + f"?t={timestamp}",
+                'priority': 3,
+                'timeout': 8
             }
-
-
-
         ]
-
-
-
         
-
-
-
-        successful_results = []
-
-
-
-        highest_version = None
-
-
-
-        highest_version_tuple = (0, 0, 0)
-
-
-
-        highest_version_url = None
-
-
-
+        # Headers optimisés
+        headers = {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'User-Agent': f'VMT-Path-Renamer/{VERSION}',
+            'Accept': 'text/plain',
+            'Connection': 'close'
+        }
+        
         local_version_tuple = parse_version(VERSION)
-
-
-
+        best_version = None
+        best_version_tuple = (0, 0, 0)
+        best_url = None
         
-
-
+        def fetch_version(config):
+            """Fonction pour récupérer une version depuis une URL"""
+            try:
+                response = requests.get(
+                    config['url'], 
+                    headers=headers, 
+                    timeout=config['timeout']
+                )
+                
+                if response.status_code == 200:
+                    version_text = response.text.strip().replace('\ufeff', '').replace('\r', '').replace('\n', '').strip()
+                    version_tuple = parse_version(version_text)
+                    
+                    return {
+                        'success': True,
+                        'version': version_text,
+                        'version_tuple': version_tuple,
+                        'url': config['url'],
+                        'priority': config['priority']
+                    }
+                else:
+                    return {'success': False, 'error': f'HTTP {response.status_code}', 'priority': config['priority']}
+                    
+            except requests.exceptions.Timeout:
+                return {'success': False, 'error': 'Timeout', 'priority': config['priority']}
+            except requests.exceptions.ConnectionError:
+                return {'success': False, 'error': 'Connection Error', 'priority': config['priority']}
+            except Exception as e:
+                return {'success': False, 'error': str(e), 'priority': config['priority']}
+        
+        # Exécution parallèle avec timeout global
+        results = []
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # Soumettre toutes les tâches
+            future_to_config = {executor.submit(fetch_version, config): config for config in urls_config}
+            
+            # Récupérer les résultats avec timeout global de 15 secondes
+            try:
+                for future in as_completed(future_to_config, timeout=15):
+                    result = future.result()
+                    results.append(result)
+                    
+                    # Si on trouve une version valide, on peut arrêter plus tôt
+                    if result['success'] and result['version_tuple'] > local_version_tuple:
+                        if not silent:
+                            print(f"[SUCCESS] Version plus récente trouvée: {result['version']} (arrêt anticipé)")
+                        # Annuler les autres tâches
+                        for f in future_to_config:
+                            f.cancel()
+                        break
+                        
+            except Exception as e:
+                if not silent:
+                    print(f"[WARNING] Timeout global atteint: {e}")
+        
+        # Analyser les résultats
+        successful_results = [r for r in results if r['success']]
+        
+        if not successful_results:
+            error_messages = [r['error'] for r in results if not r['success']]
+            return "Erreur", False, f"Aucun serveur accessible. Erreurs: {', '.join(error_messages[:3])}"
+        
+        # Trouver la meilleure version (trier par priorité puis par version)
+        successful_results.sort(key=lambda x: (x['priority'], -x['version_tuple'][0], -x['version_tuple'][1], -x['version_tuple'][2]))
+        best_result = successful_results[0]
+        
+        best_version = best_result['version']
+        best_version_tuple = best_result['version_tuple']
+        best_url = best_result['url']
+        
+        # Sauvegarder l'URL optimale pour le téléchargement
+        global BEST_UPDATE_URL
+        if "jsdelivr.net" in best_url:
+            BEST_UPDATE_URL = best_url.replace("version.txt", "test.py").split('?')[0]
+        elif "statically.io" in best_url:
+            BEST_UPDATE_URL = best_url.replace("version.txt", "test.py").split('?')[0]
+        else:
+            BEST_UPDATE_URL = UPDATE_SCRIPT_URL
 
         if not silent:
-
-
-
-            print(f"[DEBUG] Version locale tuple: {local_version_tuple}")
-
-
-
-            print(f"[DEBUG] Test prioritaire des CDN (éviter GitHub)...")
-
-
-
+            print(f"[DEBUG] URL de téléchargement: {BEST_UPDATE_URL}")
         
-
-
-
-        for i, url in enumerate(urls_to_try):
-
-
-
-            try:
-
-
-
-                if not silent:
-
-
-
-                    print(f"[DEBUG] Test CDN {i+1}: {url[:80]}...")
-
-
-
-                
-
-
-
-                # Headers simples pour CDN
-
-
-
-                headers = {
-
-
-
-                    'Cache-Control': 'no-cache',
-
-
-
-                    'User-Agent': f'VMT-Path-Renamer/{VERSION}',
-
-
-
-                    'Accept': 'text/plain'
-
-
-
-                }
-
-
-
-                
-
-
-
-                r = requests.get(url, headers=headers, timeout=10)
-
-
-
-                
-
-
-
-                if r.status_code == 200:
-
-
-
-                    latest_version_raw = r.text.strip()
-
-
-
-                    # Nettoyer la version (enlever BOM, espaces, retours à la ligne)
-
-
-
-                    latest_version_clean = latest_version_raw.replace('\ufeff', '').replace('\r', '').replace('\n', '').strip()
-
-
-
-                    if not silent:
-
-
-
-                        print(f"[DEBUG] Version trouvée: '{latest_version_clean}' depuis CDN")
-
-
-
-                    
-
-
-
-                    version_tuple = parse_version(latest_version_clean)
-
-
-
-                    if version_tuple > highest_version_tuple:
-
-
-
-                        highest_version = latest_version_clean
-
-
-
-                        highest_version_tuple = version_tuple
-
-
-
-                        highest_version_url = url
-
-
-
-                        if not silent:
-
-
-
-                            print(f"[DEBUG] Nouvelle version la plus haute: {highest_version}")
-
-
-
-                        
-
-
-
-                        # Arrêter dès qu'on trouve une version plus récente que la locale
-
-
-
-                        if version_tuple > local_version_tuple:
-
-
-
-                            if not silent:
-
-
-
-                                print(f"[DEBUG] Version plus récente trouvée depuis CDN, arrêt")
-
-
-
-                            break
-
-
-
-                else:
-
-
-
-                    if not silent:
-
-
-
-                        print(f"[DEBUG] CDN {i+1} - Erreur HTTP {r.status_code}")
-
-
-
-                    
-
-
-
-            except requests.exceptions.Timeout:
-
-
-
-                if not silent:
-
-
-
-                    print(f"[DEBUG] CDN {i+1} - Timeout")
-
-
-
-                continue
-
-
-
-            except requests.exceptions.ConnectionError:
-
-
-
-                if not silent:
-
-
-
-                    print(f"[DEBUG] CDN {i+1} - Erreur de connexion")
-
-
-
-                continue
-
-
-
-            except Exception as e:
-
-
-
-                if not silent:
-
-
-
-                    print(f"[DEBUG] CDN {i+1} - Erreur: {e}")
-
-
-
-                continue
-
-
-
-                
-
-
-
-            # Petite pause entre les URLs pour éviter le rate limiting
-
-
-
-            time.sleep(0.1)
-
-
-
+        # Comparaison des versions
+        up_to_date = local_version_tuple >= best_version_tuple
         
-
-
-
-        if not highest_version:
-
-
-
-            if not silent:
-
-
-
-                print("[INFO] Aucune version récupérée depuis les CDN")
-
-
-
-            return "Erreur", False, "Impossible d'accéder aux serveurs de mise à jour"
-
-
-
+        if not silent:
+            status = "à jour" if up_to_date else "mise à jour disponible"
+            print(f"[INFO] Application {status} (locale: {VERSION}, distante: {best_version})")
         
-
-
-
-        # Utiliser la version la plus haute trouvée
-
-
-
-        if highest_version:
-
-
-
-            if not silent:
-
-
-
-                print(f"[DEBUG] Version finale (la plus haute): '{highest_version}' depuis {highest_version_url}")
-
-
-
-            
-
-
-
-            # Sauvegarder l'URL de la version la plus haute pour le téléchargement
-
-
-
-            if highest_version_url:
-
-
-
-                global BEST_UPDATE_URL
-
-
-
-                # Convertir l'URL de version vers l'URL du script
-
-
-
-                if "jsdelivr.net" in highest_version_url:
-
-
-
-                    BEST_UPDATE_URL = highest_version_url.replace("version.txt", "test.py")
-
-
-
-                elif "statically.io" in highest_version_url:
-
-
-
-                    BEST_UPDATE_URL = highest_version_url.replace("version.txt", "test.py")
-
-
-
-                else:
-
-
-
-                    BEST_UPDATE_URL = UPDATE_SCRIPT_URL
-
-
-
-                if not silent:
-
-
-
-                    print(f"[DEBUG] URL de téléchargement: {BEST_UPDATE_URL}")
-
-
-
-            
-
-
-
-            up_to_date = local_version_tuple >= highest_version_tuple
-
-
-
-            if not silent:
-
-
-
-                print(f"[DEBUG] À jour: {up_to_date}")
-
-
-
-            
-
-
-
-            return highest_version, up_to_date, f"Version la plus haute trouvée: {highest_version}"
-
-
-
-        else:
-
-
-
-            return "Erreur", False, "Aucune version valide trouvée"
-
-
-
-        
-
-
+        return best_version, up_to_date, f"Vérification réussie - Version distante: {best_version}"
 
     except requests.exceptions.Timeout:
-
-
-
         error_msg = "Timeout lors de la vérification de mise à jour"
-
-
-
         print(f"[INFO] {error_msg} - Réessayez plus tard")
-
-
-
         return "Erreur", False, "Timeout réseau - Réessayez dans quelques minutes"
 
-
-
-
-
-
-
     except requests.exceptions.ConnectionError:
-
-
-
-
-
-
-
         error_msg = "Erreur de connexion lors de la vérification de mise à jour"
-
-
-
-
-
-
-
         print(f"[INFO] {error_msg} - Vérifiez votre connexion internet")
-
-
-
-
-
-
-
         return "Erreur", False, "Pas de connexion internet"
 
-
-
-
-
-
-
     except Exception as e:
-
-
-
-
-
-
-
         error_msg = f"Erreur lors de la vérification de mise à jour: {e}"
-
-
-
-
-
-
-
         print(f"[DEBUG] {error_msg}")
-
-
-
-
-
-
-
+        
         # Seulement créer crash.txt pour les vraies erreurs critiques
-
-
-
-
-
-
-
         if "parse" in str(e).lower() or "critical" in str(e).lower():
-
-
-
-
-
-
-
             log_crash(error_msg)
-
-
-
-
-
-
-
+        
         return "Erreur", False, f"Erreur technique: {str(e)[:50]}..."
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# ------------------ Fonctions de téléchargement optimisées ------------------
+
+def download_update_optimized(latest_version, progress_callback=None):
+    """Télécharge la mise à jour de manière optimisée avec gestion d'erreurs robuste"""
+    
+    try:
+        import tempfile
+        import shutil
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        if progress_callback:
+            progress_callback("Préparation du téléchargement...", 5)
+        
+        # URLs de téléchargement prioritaires
+        download_urls = []
+        
+        # Utiliser l'URL optimale trouvée lors de la vérification
+        if BEST_UPDATE_URL and BEST_UPDATE_URL != UPDATE_SCRIPT_URL:
+            download_urls.append({
+                'url': BEST_UPDATE_URL,
+                'priority': 1,
+                'timeout': 30
+            })
+        
+        # URLs de fallback
+        jsdelivr_url = UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.jsdelivr.net/gh").replace("/main/", "@main/")
+        statically_url = UPDATE_SCRIPT_URL.replace("raw.githubusercontent.com", "cdn.statically.io/gh").replace("/main/", "/main/")
+        
+        download_urls.extend([
+            {'url': jsdelivr_url, 'priority': 2, 'timeout': 25},
+            {'url': statically_url, 'priority': 3, 'timeout': 25},
+            {'url': UPDATE_SCRIPT_URL, 'priority': 4, 'timeout': 30}
+        ])
+        
+        headers = {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'User-Agent': f'VMT-Path-Renamer/{VERSION}',
+            'Accept': 'text/plain, application/octet-stream',
+            'Connection': 'close'
+        }
+        
+        def download_from_url(config):
+            """Télécharge depuis une URL spécifique"""
+            try:
+                response = requests.get(
+                    config['url'], 
+                    headers=headers, 
+                    timeout=config['timeout'],
+                    stream=True
+                )
+                
+                if response.status_code == 200:
+                    content = response.content
+                    # Validation basique du contenu
+                    if len(content) > 50000 and b'import' in content[:1000]:  # Fichier Python valide
+                        return {
+                            'success': True,
+                            'content': content,
+                            'url': config['url'],
+                            'priority': config['priority'],
+                            'size': len(content)
+                        }
+                    else:
+                        return {'success': False, 'error': 'Contenu invalide', 'priority': config['priority']}
+                else:
+                    return {'success': False, 'error': f'HTTP {response.status_code}', 'priority': config['priority']}
+                    
+            except Exception as e:
+                return {'success': False, 'error': str(e), 'priority': config['priority']}
+        
+        if progress_callback:
+            progress_callback("Téléchargement en cours...", 20)
+        
+        # Téléchargement parallèle avec timeout
+        successful_download = None
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_to_config = {executor.submit(download_from_url, config): config for config in download_urls[:2]}
+            
+            try:
+                for future in as_completed(future_to_config, timeout=45):
+                    result = future.result()
+                    if result['success']:
+                        successful_download = result
+                        # Annuler les autres téléchargements
+                        for f in future_to_config:
+                            f.cancel()
+                        break
+            except Exception:
+                pass
+        
+        # Si le téléchargement parallèle échoue, essayer séquentiellement
+        if not successful_download:
+            if progress_callback:
+                progress_callback("Tentative de téléchargement alternatif...", 40)
+                
+            for config in download_urls[2:]:
+                result = download_from_url(config)
+                if result['success']:
+                    successful_download = result
+                    break
+        
+        if not successful_download:
+            return False, "Échec du téléchargement depuis tous les serveurs"
+        
+        if progress_callback:
+            progress_callback("Installation de la mise à jour...", 70)
+        
+        # Sauvegarder le fichier
+        script_path = os.path.abspath(__file__)
+        backup_path = script_path + ".backup"
+        
+        # Créer une sauvegarde
+        try:
+            shutil.copy2(script_path, backup_path)
+        except Exception as e:
+            return False, f"Impossible de créer la sauvegarde: {e}"
+        
+        # Écrire le nouveau fichier
+        try:
+            with open(script_path, 'wb') as f:
+                f.write(successful_download['content'])
+        except Exception as e:
+            # Restaurer la sauvegarde en cas d'erreur
+            try:
+                shutil.copy2(backup_path, script_path)
+            except:
+                pass
+            return False, f"Erreur lors de l'écriture: {e}"
+        
+        if progress_callback:
+            progress_callback("Mise à jour terminée!", 100)
+        
+        # Nettoyer la sauvegarde après succès
+        try:
+            os.remove(backup_path)
+        except:
+            pass
+        
+        return True, f"Mise à jour réussie vers la version {latest_version} (source: {successful_download['url']})"
+        
+    except Exception as e:
+        return False, f"Erreur critique lors de la mise à jour: {e}"
 
 # ------------------ Fonctions VMT/Dossier ------------------
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def read_file(path):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     for enc in ('utf-8','cp1252','latin-1'):
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         try:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             with open(path,'r',encoding=enc) as f:
-
-
-
-
 
 
 
@@ -4684,15 +4136,43 @@ class VMTPathRenamer(QWidget):
 
 
 
-        self.update_timer.timeout.connect(self.silent_check_update)
-
-
-
+        self.update_timer.timeout.connect(self.auto_check_update)
 
 
 
 
         self.update_timer.start(15 * 60 * 1000)  # 15 minutes en millisecondes
+        self.countdown_timer.timeout.connect(self.update_countdown_display)
+        self.countdown_timer.start(1000)  # 1 seconde
+        
+        # Initialiser le temps de prochaine vérification
+        import time
+        self.next_check_time = time.time() + (15 * 60)  # 15 minutes
+    
+    def auto_check_update(self):
+        """Vérification automatique silencieuse des mises à jour"""
+        try:
+            latest_version, up_to_date, error_msg = check_update(silent=True)
+            
+            if latest_version != "Erreur" and not up_to_date:
+                # Mise à jour disponible - notifier discrètement
+                self.update_label.setText(f"🔔 Nouvelle version disponible ({latest_version})")
+                self.update_btn.setEnabled(True)
+                self.log_widget.append(f"🔔 Mise à jour automatique détectée: {latest_version}")
+            elif up_to_date:
+                # Application à jour
+                self.update_label.setText(f"✅ Application à jour ({VERSION})")
+                self.update_btn.setEnabled(False)
+            # En cas d'erreur, ne rien faire (vérification silencieuse)
+            
+            # Réinitialiser le timer pour la prochaine vérification
+            import time
+            self.next_check_time = time.time() + (15 * 60)
+            
+        except Exception as e:
+            # Erreur silencieuse - ne pas déranger l'utilisateur
+            print(f"[DEBUG] Erreur vérification automatique: {e}")
+            pass
 
 
 
@@ -8395,645 +7875,213 @@ class VMTPathRenamer(QWidget):
 
 
 
-
-
-
     def manual_check_update(self):
-
-
-
-
-
-
-
-        """Vérification manuelle des mises à jour"""
-
-
-
-
-
-
-
-        self.log_widget.append("🔄 Vérification manuelle des mises à jour...")
-
-
-
-
-
-
-
-        self.check_update_btn.setEnabled(False)
-
-
-
-
-
-
-
-        self.check_update_btn.setText("🔄 Vérification...")
-
-
-
-
-
-
-
+        """Vérification manuelle des mises à jour optimisée"""
         
-
-
-
-
-
-
-
+        self.log_widget.append("🔄 Vérification des mises à jour...")
+        self.check_update_btn.setEnabled(False)
+        self.check_update_btn.setText("🔄 Vérification...")
+        
         try:
-
-
-
-
-
-
-
             latest_version, up_to_date, error_msg = check_update()
-
-
-
-
-
-
-
             
-
-
-
-
-
-
-
             if latest_version == "Erreur":
-
-
-
-
-
-
-
                 self.update_label.setText("⚠️ Impossible de vérifier la mise à jour")
-
-
-
-
-
-
-
                 self.update_btn.setEnabled(False)
-
-
-
-
-
-
-
-                self.log_widget.append(f"❌ Erreur de vérification: {error_msg}")
-
-
-
-
-
-
-
-                # Pas de popup pour les erreurs réseau - juste les logs
-
-
-
-
-
-
-
-                if not ("cache" in error_msg.lower() or "timeout" in error_msg.lower() or "connexion" in error_msg.lower()):
-
-
-
-
-
-
-
-                    QMessageBox.warning(self, "Erreur mise à jour",
-
-
-
-
-
-
-
-                                        f"Impossible de vérifier la mise à jour.\n"
-
-
-
-
-
-
-
-                                        f"Détails: {error_msg}")
-
-
-
-
-
-
-
+                self.log_widget.append(f"❌ Erreur: {error_msg}")
             elif up_to_date:
-
-
-
-
-
-
-
                 self.update_label.setText(f"✅ Application à jour ({VERSION})")
-
-
-
-
-
-
-
                 self.update_btn.setEnabled(False)
-
-
-
-
-
-
-
                 self.log_widget.append(f"✅ Version actuelle: {VERSION} (à jour)")
-
-
-
-
-
-
-
             else:
-
-
-
-
-
-
-
-                self.update_label.setText(f"❌ Nouvelle version disponible ({latest_version})")
-
-
-
-
-
-
-
-                self.update_btn.setEnabled(True)
-
-
-
-
-
-
-
-                self.log_widget.append(f"⬇️ Nouvelle version disponible: {latest_version}")
-
-
-
-
-
-
-
-                self.log_widget.append(f"📊 Version locale: {VERSION} < Version GitHub: {latest_version}")
-
-
-
-
-
-
-
-                # Forcer l'installation de la mise à jour
-
-                self.force_update_installation(latest_version)
-
-
-
-
-
-
-
-        finally:
-
-
-
-
-
-
-
-            self.check_update_btn.setEnabled(True)
-
-
-
-
-
-
-
-            self.check_update_btn.setText("🔄 Vérifier")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def silent_check_update(self):
-
-
-
-
-
-
-
-        """Vérification silencieuse automatique toutes les 15 minutes"""
-
-
-
-
-
-
-
-        try:
-
-
-
-
-
-
-
-            latest_version, up_to_date, error_msg = check_update(silent=True)
-
-
-
-
-
-
-
-            
-
-
-
-
-
-
-
-            if latest_version != "Erreur" and not up_to_date:
-
-
-
-
-
-
-
-                # Mise à jour détectée - mettre à jour l'interface
-
-
-
-
-
-
-
                 self.update_label.setText(f"🔔 Nouvelle version disponible ({latest_version})")
-
-
-
-
-
-
-
                 self.update_btn.setEnabled(True)
-
-
-
-
-
-
-
-                # Ajouter une notification discrète dans les logs
-
-
-
-
-
-
-
-                import datetime
-
-
-
-
-
-
-
-                current_time = datetime.datetime.now().strftime("%H:%M")
-
-
-
-
-
-
-
-                self.log_widget.append(f"[{current_time}] 🔔 Mise à jour détectée automatiquement: {latest_version}")
-
+                self.log_widget.append(f"⬇️ Nouvelle version disponible: {latest_version}")
+                self.log_widget.append(f"📊 Version locale: {VERSION} < Version distante: {latest_version}")
                 
-
-                # Forcer l'installation même en mode silencieux
-
+                # Proposer l'installation automatique
                 self.force_update_installation(latest_version)
-
-
-
-
-
-
-
-            elif latest_version != "Erreur" and up_to_date:
-
-
-
-
-
-
-
-                # Application à jour - mettre à jour le statut si nécessaire
-
-
-
-
-
-
-
-                if "Nouvelle version" in self.update_label.text():
-
-
-
-
-
-
-
-                    self.update_label.setText(f"✅ Application à jour ({VERSION})")
-
-
-
-
-
-
-
-                    self.update_btn.setEnabled(False)
-
-
-
-
-
-
-
-        except Exception:
-
-
-
-
-
-
-
-            # Ignorer les erreurs en mode silencieux
-
-
-
-
-
-
-
-            pass
-
-
-
-
-
-
-
+                
+        except Exception as e:
+            self.update_label.setText("❌ Erreur lors de la vérification")
+            self.update_btn.setEnabled(False)
+            self.log_widget.append(f"❌ Exception: {str(e)}")
+        
         finally:
-
-
-
-
-
-
-
-            # Réinitialiser le timer pour le prochain check dans 15 minutes
-
-
-
-
-
-
-
-            self.next_check_time = time.time() + (15 * 60)
-
-
-
-
-
-
-
-
-
-
-
-
-
+            # Réactiver le bouton
+            self.check_update_btn.setEnabled(True)
+            self.check_update_btn.setText("🔄 Vérifier les mises à jour")
 
 
     def force_update_installation(self, latest_version):
-
-        """Force l'utilisateur à installer la mise à jour"""
-
-        # Désactiver toute l'interface
-
-        self.setEnabled(False)
-
+        """Force l'installation de la mise à jour avec interface optimisée"""
         
-
-        # Créer une boîte de dialogue modale obligatoire
-
+        # Désactiver l'interface principale
+        self.setEnabled(False)
+        
+        # Créer une boîte de dialogue moderne
         msg_box = QMessageBox(self)
-
-        msg_box.setWindowTitle("⚠️ Mise à jour obligatoire")
-
-        msg_box.setIcon(QMessageBox.Warning)
-
+        msg_box.setWindowTitle("🔄 Mise à jour disponible")
+        msg_box.setIcon(QMessageBox.Information)
         msg_box.setText(f"""
-
-🔄 MISE À JOUR OBLIGATOIRE DÉTECTÉE
-
-
-
-Une nouvelle version est disponible et doit être installée.
-
-
+🎆 NOUVELLE VERSION DISPONIBLE
 
 Version actuelle: {VERSION}
-
 Nouvelle version: {latest_version}
 
+La mise à jour sera téléchargée et installée automatiquement.
+L'application redémarrera après l'installation.
 
-
-L'application sera fermée après l'installation.
-
-Vous devez redémarrer manuellement après la mise à jour.
-
-
-
-Cliquez sur "Installer" pour continuer.
-
+Voulez-vous procéder maintenant?
         """)
-
         
-
-        # Seul bouton disponible : Installer
-
-        install_btn = msg_box.addButton("🔄 Installer maintenant", QMessageBox.AcceptRole)
-
+        install_btn = msg_box.addButton("🚀 Installer", QMessageBox.AcceptRole)
+        later_btn = msg_box.addButton("⏰ Plus tard", QMessageBox.RejectRole)
         msg_box.setDefaultButton(install_btn)
-
         
-
-        # Empêcher la fermeture de la boîte de dialogue
-
-        msg_box.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint)
-
-        
-
-        # Style de la boîte de dialogue
-
+        # Style futuriste
         msg_box.setStyleSheet("""
-
             QMessageBox {
-
-                background-color: #222;
-
-                color: white;
-
-                font-family: 'Segoe UI';
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0A0A0A, stop: 1 #1A1A1A);
+                color: #FFFFFF;
+                font-family: 'Inter', 'Segoe UI';
                 font-size: 12px;
-
+                border: 2px solid #00D4FF;
+                border-radius: 12px;
             }
-
             QMessageBox QLabel {
-
-                color: white;
-
+                color: #FFFFFF;
                 background-color: transparent;
-
-                padding: 10px;
-
+                padding: 15px;
+                font-size: 13px;
             }
-
             QMessageBox QPushButton {
-
-                background-color: #e50914;
-
-                color: white;
-
-                font-weight: bold;
-
-                padding: 10px 20px;
-
-                border-radius: 5px;
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #00D4FF, stop: 1 #0099CC);
+                color: #FFFFFF;
+                font-weight: 600;
+                padding: 12px 24px;
+                border-radius: 8px;
                 border: none;
-
-                min-width: 120px;
-
+                min-width: 100px;
                 font-size: 12px;
-
             }
-
             QMessageBox QPushButton:hover {
-
-                background-color: #f40612;
-
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #1AE5FF, stop: 1 #00B8E6);
             }
-
         """)
-
         
-
-        # Afficher la boîte de dialogue et attendre la réponse
-
         result = msg_box.exec_()
-
         
-
-        # Lancer le téléchargement et l'installation
-
         if result == QMessageBox.AcceptRole:
-
-            self.download_update()
-
-            # Fermer l'application après l'installation
-
-            QApplication.quit()
-
+            self.download_update_with_progress(latest_version)
+        else:
+            self.setEnabled(True)  # Réactiver l'interface si l'utilisateur refuse
     
 
+    def download_update_with_progress(self, latest_version):
+        """Télécharge et installe la mise à jour avec barre de progression"""
+        
+        from PyQt5.QtWidgets import QProgressDialog
+        from PyQt5.QtCore import QThread, pyqtSignal
+        
+        class UpdateWorker(QThread):
+            progress = pyqtSignal(str, int)
+            finished = pyqtSignal(bool, str)
+            
+            def __init__(self, version):
+                super().__init__()
+                self.version = version
+            
+            def run(self):
+                def progress_callback(message, percent):
+                    self.progress.emit(message, percent)
+                
+                success, message = download_update_optimized(self.version, progress_callback)
+                self.finished.emit(success, message)
+        
+        # Créer la barre de progression
+        progress_dialog = QProgressDialog(
+            "Préparation du téléchargement...",
+            "Annuler",
+            0, 100,
+            self
+        )
+        progress_dialog.setWindowTitle("📦 Téléchargement en cours")
+        progress_dialog.setWindowModality(Qt.WindowModal)
+        progress_dialog.setAutoClose(False)
+        progress_dialog.setAutoReset(False)
+        
+        # Style de la barre de progression
+        progress_dialog.setStyleSheet("""
+            QProgressDialog {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 #0A0A0A, stop: 1 #1A1A1A);
+                color: #FFFFFF;
+                font-family: 'Inter';
+            }
+            QProgressBar {
+                border: 2px solid #333333;
+                border-radius: 8px;
+                background-color: #2A2A2A;
+                text-align: center;
+                color: #FFFFFF;
+                font-weight: 600;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                    stop: 0 #00D4FF, stop: 1 #00FF88);
+                border-radius: 6px;
+            }
+        """)
+        
+        # Créer et démarrer le worker
+        self.update_worker = UpdateWorker(latest_version)
+        
+        def update_progress(message, percent):
+            progress_dialog.setLabelText(message)
+            progress_dialog.setValue(percent)
+        
+        def on_update_finished(success, message):
+            progress_dialog.close()
+            
+            if success:
+                QMessageBox.information(
+                    self,
+                    "✅ Mise à jour réussie",
+                    f"{message}\n\nL'application va redémarrer maintenant."
+                )
+                # Redémarrer l'application
+                import subprocess
+                import sys
+                subprocess.Popen([sys.executable] + sys.argv)
+                QApplication.quit()
+            else:
+                QMessageBox.critical(
+                    self,
+                    "❌ Échec de la mise à jour",
+                    f"Erreur: {message}\n\nVeuillez réessayer plus tard."
+                )
+                self.setEnabled(True)
+        
+        self.update_worker.progress.connect(update_progress)
+        self.update_worker.finished.connect(on_update_finished)
+        self.update_worker.start()
+        
+        progress_dialog.show()
+    
     def show_changelog(self):
-
         """Ouvrir la fenêtre changelog"""
-
         changelog_dialog = ChangelogDialog()
-
         changelog_dialog.exec_()
 
-    
-
     def update_countdown_display(self):
-
-
-
-
-
-
-
         """Met à jour l'affichage du countdown toutes les secondes"""
-
-
-
-
-
-
-
+        
         try:
-
-
-
-
-
-
-
             remaining_seconds = int(self.next_check_time - time.time())
-
-
-
 
 
 
